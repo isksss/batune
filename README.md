@@ -208,4 +208,4 @@ cargo test
 
 ## ライセンス
 
-MIT。同梱のフォント HackGen Console NF は `fonts/LICENSE` に従います。
+MIT。同梱のフォント HackGen Console NF は `fonts/LICENSE` に従います。HackGen の元になったフォントの著作権表示とライセンスは、Hack が `fonts/LICENSE_Hack`、源柔ゴシックが `fonts/LICENSE_GenJyuuGothic`、Nerd Fonts が `fonts/LICENSE_NerdFonts` にあります(HackGen v2.10.0 の `source/` から改変せずに複製)。

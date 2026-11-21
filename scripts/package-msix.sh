@@ -38,6 +38,7 @@ cp "$root"/packaging/msix/Assets/*.png "$stage/Assets/"
 cp "$exe" "$stage/batune.exe"
 cp "$root/LICENSE" "$stage/LICENSE.txt"
 cp "$root/fonts/LICENSE" "$stage/LICENSE.HackGen.txt"
+for f in "$root"/fonts/LICENSE_*; do cp "$f" "$stage/LICENSE.${f##*/LICENSE_}.txt"; done
 sed -e "s|@IDENTITY_NAME@|$(subst "$MSIX_IDENTITY_NAME")|" \
     -e "s|@PUBLISHER@|$(subst "$MSIX_PUBLISHER")|" \
     -e "s|@PUBLISHER_DISPLAY_NAME@|$(subst "$MSIX_PUBLISHER_DISPLAY_NAME")|" \

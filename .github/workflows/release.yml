@@ -45,12 +45,14 @@ jobs:
           mkdir "dist/$linux"
           cp target/release/batune README.md LICENSE packaging/linux/batune.desktop packaging/linux/batune.png "dist/$linux/"
           cp fonts/LICENSE "dist/$linux/LICENSE.HackGen"
+          for f in fonts/LICENSE_*; do cp "$f" "dist/$linux/LICENSE.${f#fonts/LICENSE_}"; done
           tar -C dist -czf "dist/$linux.tar.gz" "$linux"
 
           windows="batune-$GITHUB_REF_NAME-x86_64-windows"
           mkdir "dist/$windows"
           cp target/x86_64-pc-windows-gnu/release/batune.exe README.md LICENSE "dist/$windows/"
           cp fonts/LICENSE "dist/$windows/LICENSE.HackGen"
+          for f in fonts/LICENSE_*; do cp "$f" "dist/$windows/LICENSE.${f#fonts/LICENSE_}"; done
           (cd dist && zip -r "$windows.zip" "$windows")
 
           cd dist && sha256sum *.tar.gz *.zip > SHA256SUMS
