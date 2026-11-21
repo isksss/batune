@@ -14,6 +14,7 @@ mod target;
 
 use std::error::Error;
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 
@@ -194,7 +195,9 @@ async fn session(
         keys: keys.clone(),
         out: out.clone(),
         accepted: None,
+        changed_key: Arc::new(AtomicBool::new(false)),
     };
+    let changed_key = handler.changed_key.clone();
     out.print(&format!("Connecting to {target}...\n"));
     let mut config = client::Config::default();
     // An unreadable file is reported by the key check itself.
@@ -210,7 +213,15 @@ async fn session(
     // The handler only prompts during key exchange, which is over; from here
     // on this task owns the keyboard.
     let mut keys = keys.lock().await;
-    if !auth::authenticate(&mut handle, target, &mut keys, out).await? {
+    if !auth::authenticate(
+        &mut handle,
+        target,
+        &mut keys,
+        out,
+        changed_key.load(Ordering::Relaxed),
+    )
+    .await?
+    {
         return Err("authentication failed".into());
     }
     let status = shell(&handle, &mut keys, out).await;
@@ -285,6 +296,8 @@ struct Handler {
     /// the same key: prompting then would wait on the keyboard, which the
     /// shell loop holds.
     accepted: Option<PublicKey>,
+    /// Set when the user accepted a key that differs from the recorded one.
+    changed_key: Arc<AtomicBool>,
 }
 
 impl Handler {
@@ -351,6 +364,9 @@ impl Handler {
                     path.display()
                 )),
             }
+        }
+        if matches!(status, host_key::Status::Changed { .. }) {
+            self.changed_key.store(true, Ordering::Relaxed);
         }
         self.accepted = Some(key);
         Ok(true)
