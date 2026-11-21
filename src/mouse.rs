@@ -47,7 +47,11 @@ pub fn report(
 ) -> Option<Vec<u8>> {
     let wanted = match (tracking, action) {
         (MouseTracking::Off, _) => false,
-        (MouseTracking::X10, action) => matches!(action, Action::Press(_)),
+        // X10 predates the wheel; its presses are buttons 1-3 only.
+        (MouseTracking::X10, action) => matches!(
+            action,
+            Action::Press(Button::Left | Button::Middle | Button::Right)
+        ),
         (_, Action::Press(_) | Action::Release(_)) => true,
         (MouseTracking::Normal, Action::Motion(_)) => false,
         (MouseTracking::ButtonEvent, Action::Motion(held)) => held.is_some(),
@@ -175,6 +179,9 @@ mod tests {
             report(Action::Release(Button::Left), 0, 0, NONE, t, enc),
             None
         );
+        for wheel in [Button::WheelUp, Button::WheelDown] {
+            assert_eq!(report(Action::Press(wheel), 0, 0, NONE, t, enc), None);
+        }
     }
 
     #[test]

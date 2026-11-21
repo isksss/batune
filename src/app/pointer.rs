@@ -191,6 +191,10 @@ impl Active {
             }
         }
         if self.reporting() && !self.tab().mouse.selecting {
+            // A release whose press went to the tab bar was never reported.
+            if !pressed && self.tab().mouse.held.is_none() {
+                return;
+            }
             self.tab_mut().mouse.held = pressed.then_some(button);
             self.send_mouse(if pressed {
                 Action::Press(button)
@@ -234,6 +238,7 @@ impl Active {
         self.update_link();
         if !self.tab().mouse.selecting {
             if self.reporting()
+                && !self.over_bar
                 && self.tab().mouse.reported_cell != Some(self.pointer_screen_cell())
             {
                 let held = self.tab().mouse.held;

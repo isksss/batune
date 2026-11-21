@@ -118,7 +118,8 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::CursorLeft { .. } => active.over_bar = false,
             // Presses and the wheel over the bar are egui's alone. Releases
-            // always reach the terminal, to end a drag begun on the grid.
+            // always reach the terminal, to end a drag begun on the grid;
+            // on_mouse_button reports only releases of presses it reported.
             WindowEvent::MouseInput { state, button, .. } => {
                 if ui_redraw {
                     active.window.request_redraw();
