@@ -94,7 +94,7 @@ bold_is_bright = true         # 太字を ANSI の 0-7 番の色で指定され�
 shape = "bar"                 # block / underline / bar(アプリが DECSCUSR で 2 以上を指定したらそちらが優先)
 blinking = false              # 点滅させる(アプリが DECSCUSR の 2/4/6 などで点滅しない形を指定したら止まる)
 blink_interval = 750          # 点滅の間隔(ミリ秒)。50〜5000
-blink_timeout = 5             # 最後の入力からこの秒数で点滅をやめる(0 で止めない)
+blink_timeout = 5             # 最後の入力からこの秒数で点滅をやめる(0 で止めない)。86400 まで
 
 [shell]
 program = "/bin/bash"         # 省略すると上のとおり $SHELL など
@@ -109,7 +109,7 @@ args = ["-l"]
 [window]
 columns = 100                 # 起動時の大きさ(文字数)
 rows = 30
-padding = 6.0                 # グリッドの周りの余白(論理ピクセル)
+padding = 6.0                 # グリッドの周りの余白(論理ピクセル)。0〜200
 backdrop = "mica"             # Windows 11 のタイトルバー: none(テーマの背景色)/ mica / acrylic
 title = "batune"            # ウィンドウのタイトル
 dynamic_title = true          # アプリが OSC 0/2 で付けたタイトルを title より優先する
@@ -153,7 +153,7 @@ mods = "Alt"
 chars = "\u001b\r"            # action の代わりに、端末に送る文字列
 ```
 
-size は 1〜200、line_height/cell_width は 0.5〜3.0、columns/rows は 1 以上、multiplier は 1〜100、padding は 0 以上、opacity は 0.0〜1.0、色は `"#rrggbb"`、ansi/brights は 8 色の配列で書きます。知らないキーや不正な値があるとファイル全体を無視し、理由を標準エラーに出して既定値で起動します。
+size は 1〜200、line_height/cell_width は 0.5〜3.0、columns/rows は 1 以上、multiplier は 1〜100、padding は 0〜200、blink_interval は 50〜5000、blink_timeout は 0〜86400、osc52_max_bytes は 1048576 以下、opacity は 0.0〜1.0、色は `"#rrggbb"`、ansi/brights は 8 色の配列で書きます。知らないキーや不正な値があるとファイル全体を無視し、理由を標準エラーに出して既定値で起動します。
 
 背景画像の `path` の相対パスは設定ファイルのあるディレクトリから数え、`~` はホームディレクトリです。画像は余白と、背景色がテーマの背景色のままのセルに見え、アプリが背景色を付けたセル(選択範囲や `ls` の色付きの表示など)には隠れます。cover と contain は縦横比を保ち、cover ははみ出した部分を上下か左右で等しく切り、contain は余った部分をテーマの背景色にします。設定ファイルを保存すると画像を読み直します(画像ファイルだけを書き換えても読み直しません)。読めない画像は理由を標準エラーに出し、画像なしで表示します。
 

@@ -210,6 +210,21 @@ mod tests {
     }
 
     #[test]
+    fn values_over_the_limits_are_refused_not_written() {
+        let before = Config::default();
+        let mut after = before.clone();
+        after.cursor.blink_timeout = u64::MAX;
+        assert!(
+            apply("", &before, &after)
+                .unwrap_err()
+                .contains("blink_timeout")
+        );
+        after = before.clone();
+        after.window.padding = f32::MAX;
+        assert!(apply("", &before, &after).unwrap_err().contains("padding"));
+    }
+
+    #[test]
     fn save_does_not_write_an_invalid_file_and_creates_a_missing_one() {
         let dir = std::env::temp_dir().join(format!("batune-config-edit-{}", std::process::id()));
         let path = dir.join("sub").join("config.toml");
