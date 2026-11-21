@@ -557,8 +557,8 @@ impl Config {
     }
 
     /// Every profile that can be started: the `[[profiles]]` entries, then
-    /// the WSL distributions on Windows. The first call on Windows runs
-    /// `wsl.exe`.
+    /// the WSL distributions on Windows once a background `wsl.exe` has
+    /// listed them (the first call starts it).
     pub fn profiles(&self) -> Vec<Profile> {
         self.profiles_with(crate::wsl::distros())
     }
@@ -586,10 +586,16 @@ impl Config {
     /// so that a profile that went away does not keep the terminal from
     /// opening.
     pub fn startup_profile(&self, name: Option<&str>) -> Result<Option<Profile>, Error> {
+        // Started here, at launch, so the tab menu has the list when opened.
+        crate::wsl::distros();
         let Some(wanted) = name.or(self.default_profile.as_deref()) else {
             return Ok(None);
         };
-        let profiles = self.profiles();
+        if let Some(profile) = self.profiles.iter().find(|p| p.name == wanted) {
+            return Ok(Some(profile.clone()));
+        }
+        // Only a name the config does not have waits for `wsl.exe`.
+        let profiles = self.profiles_with(crate::wsl::distros_wait());
         if let Some(profile) = profiles.iter().find(|p| p.name == wanted) {
             return Ok(Some(profile.clone()));
         }

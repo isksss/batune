@@ -159,7 +159,7 @@ size は 1〜200、line_height/cell_width は 0.5〜3.0、columns/rows は 1 以
 
 起動するシェルは、`--profile <名前>`、`default_profile`、`[shell]` の順に決めます。`--profile` に無い名前を渡すと、プロファイルの一覧を標準エラーに出して終了します。`default_profile` が無い名前を指しているときは、警告を出して `[shell]` で起動します。`[[profiles]]` の `name` が空のときや、同じ `name` を 2 回書いたときは、ほかの不正な値と同じくファイル全体を無視します。`[shell]` だけを書いた設定はこれまでどおり動きます。
 
-Windows では、`wsl.exe -l -q` で見つかった WSL のディストリビューションが、その名前のプロファイル(`wsl.exe -d <名前>`)として自動で加わります(Docker Desktop の `docker-desktop`・`docker-desktop-data` は除きます)。`batune --profile Ubuntu` や `default_profile = "Ubuntu"` で WSL を起動できます。同じ名前の `[[profiles]]` を書くとそちらを使うので、`args = ["-d", "Ubuntu", "--cd", "~"]` のように起動の仕方を変えられます。`wsl.exe` を呼ぶのは、設定に無い名前のプロファイルを探すときだけです。
+Windows では、`wsl.exe -l -q` で見つかった WSL のディストリビューションが、その名前のプロファイル(`wsl.exe -d <名前>`)として自動で加わります(Docker Desktop の `docker-desktop`・`docker-desktop-data` は除きます)。`batune --profile Ubuntu` や `default_profile = "Ubuntu"` で WSL を起動できます。同じ名前の `[[profiles]]` を書くとそちらを使うので、`args = ["-d", "Ubuntu", "--cd", "~"]` のように起動の仕方を変えられます。`wsl.exe` は最初に必要になったとき(ふつうは起動時)に裏で 1 回だけ呼び、終わるまではタブのメニューと設定画面に WSL のディストリビューションが出ません。`--profile` や `default_profile` が設定に無い名前のときだけ、その結果を待ちます。
 
 `[[keyboard.bindings]]` は次のように書きます。利用者の割り当ては既定の割り当てより優先し、同じキーと修飾キーの組を何度も書いたら後のものが効きます。
 
