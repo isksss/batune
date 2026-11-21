@@ -1,0 +1,49 @@
+[package]
+name = "batune"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/isksss/batune"
+description = "Native GPU terminal for Linux and Windows (winit + wgpu)"
+
+[dependencies]
+# The default `image-data` feature pulls in an image codec stack the terminal
+# does not use.
+arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
+bitflags = "2"
+bytemuck = { version = "1", features = ["derive"] }
+cosmic-text = "0.19"
+dirs = "7"
+egui = "0.37"
+egui-wgpu = { version = "0.37", default-features = false }
+egui-winit = { version = "0.37", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
+miniz_oxide = "0.8"
+notify = "8"
+open = "5"
+pollster = "1"
+portable-pty = "0.9"
+# ring, not aws-lc-rs, to keep a single crypto backend (and no cmake/NASM on Windows).
+russh = { version = "0.63", default-features = false, features = ["flate2", "rsa", "ring"] }
+serde = { version = "1", features = ["derive"] }
+swash = "0.2"
+tokio = { version = "1", features = ["rt", "macros", "sync", "net", "time"] }
+toml = "1"
+# The version already in the lock file (through toml); edits the file in
+# place for the settings screen.
+toml_edit = "0.25"
+unicode-properties = { version = "0.1", default-features = false, features = ["emoji"] }
+unicode-segmentation = "1.13"
+unicode-width = "0.2"
+vte = "0.15"
+wgpu = "30"
+winit = "0.30"
+
+[target.'cfg(windows)'.dependencies]
+# Only for the documented dark-mode DWM attribute; winit covers the other DWM
+# attributes. 0.61 is the version already in the lock file.
+windows-sys = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
+
+[profile.release]
+opt-level = "s"
+lto = true

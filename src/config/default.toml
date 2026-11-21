@@ -1,0 +1,151 @@
+# batune の設定ファイル。
+# Linux: $XDG_CONFIG_HOME/batune/config.toml(既定 ~/.config/batune/config.toml)
+# Windows: %APPDATA%\batune\config.toml
+# 保存すると開いているウィンドウに反映される(shell・profiles・default_profile と window の columns/rows/startup_mode は次の起動から)。
+
+# 起動するプロファイルの名前(下の [[profiles]] を参照)。コマンドラインの --profile <名前> が優先される。
+# 省略すると [shell] で起動する。無い名前を指したときは警告を出して [shell] で起動する。
+# default_profile = "bash"
+
+[font]
+# 省略すると内蔵の HackGen Console NF(絵文字などは入っているフォントで補う)。
+# family = "DejaVu Sans Mono"
+size = 14.0
+# セルの高さと幅をフォントの何倍にするか(0.5〜3.0)。文字はセルの真ん中に置く。
+line_height = 1.0
+cell_width = 1.0
+
+[colors]
+# 組み込みテーマ: batune-dark, batune-light, solarized-dark, solarized-light, gruvbox-dark
+theme = "batune-dark"
+# テーマの色を個別に上書きする。
+# foreground = "#d8d8d8"
+# background = "#1c1c24"
+# cursor = "#d8d8d8"
+# ansi = ["#1c1c24", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#c8ccd4"]
+# brights = ["#5c6370", "#f08c95", "#b5e096", "#f5d59b", "#81c8ff", "#dc98f0", "#76d0dc", "#ffffff"]
+# 太字の文字を ANSI の 0-7 番の色で指定されたら、明るい 8-15 番の色で描く。
+bold_is_bright = true
+
+[cursor]
+# block / underline / bar。アプリが DECSCUSR で形を指定したらそちらが優先される。
+shape = "block"
+# 点滅させる。アプリが DECSCUSR の 2/4/6 などで点滅しない形を指定したらそちらが優先される。
+blinking = false
+# 点滅の間隔(ミリ秒、表示と非表示それぞれの長さ)。50-5000。
+blink_interval = 750
+# 最後の入力からこの秒数が経ったら点滅をやめて表示したままにする。0 なら止めない。
+blink_timeout = 5
+
+[shell]
+# プロファイルを選ばずに起動したときのプログラム。
+# 省略すると $SHELL(Windows は pwsh → powershell → cmd)。
+# program = "/bin/bash"
+# args = ["-l"]
+# working_directory = "~"
+
+# プロファイル。[[profiles]] を並べ、name と、[shell] と同じ program・args・working_directory を書く。
+# name は必須で、空や重複は設定の誤りになる。program を省略すると [shell] の既定と同じプログラム。
+# Windows では WSL のディストリビューション(wsl.exe -l -q)が、その名前のプロファイル
+# (wsl.exe -d <名前>)として自動で加わる。同じ名前の [[profiles]] があればそちらを使う。
+# [[profiles]]
+# name = "bash"
+# program = "/bin/bash"
+# args = ["-l"]
+#
+# [[profiles]]
+# name = "Ubuntu"
+# program = "wsl.exe"
+# args = ["-d", "Ubuntu", "--cd", "~"]
+
+[window]
+columns = 80
+rows = 24
+# グリッドの周りの余白(論理ピクセル)。
+padding = 6.0
+# Windows 11 のタイトルバーの背景: none(テーマの背景色)/ mica / acrylic。
+# 端末の領域は常に不透明で、mica と acrylic はタイトルバーにだけかかる。
+backdrop = "none"
+title = "batune"
+# プログラムが付けたタイトル(OSC 0/2)を title より優先する。
+dynamic_title = true
+# 起動時の大きさ: windowed(columns×rows に合わせる)/ maximized / fullscreen。
+startup_mode = "windowed"
+
+[background_image]
+# 背景に表示する画像(PNG / JPEG / GIF の 1 枚目)。省略すると表示しない。
+# 相対パスは設定ファイルのあるディレクトリから数える。~ はホームディレクトリ。
+# 背景色がテーマの背景色のままのセルと余白に見え、背景色を指定したセルには隠れる。
+# path = "~/Pictures/wallpaper.png"
+# テーマの背景色の上に重ねる濃さ(0.0-1.0)。0 で見えず、1 で画像そのまま。
+opacity = 0.3
+# cover(縦横比を保って全体を覆い、はみ出しを切る)/ contain(縦横比を保って全体を収める)/ stretch(引き伸ばす)。
+fit = "cover"
+
+[scrolling]
+history = 10000
+# ホイール 1 目盛りでスクロールする行数(1-100)。マウスを読むプログラムには目盛りごとに 1 回送る。
+multiplier = 3
+
+[bell]
+# BEL を受けたら画面を一瞬反転させる。
+visual = true
+
+[clipboard]
+# アプリ(SSH 先や cat したファイルも含む)が OSC 52 でクリップボードに書き込むのを許す。
+# 読み取りの要求には設定にかかわらず応答しない。
+osc52_write = true
+# OSC 52 で書き込める最大バイト数(UTF-8)。超えたものは切り詰めずに捨てる。1048576 まで。
+osc52_max_bytes = 1048576
+
+[mouse]
+# キーを打ったらマウスポインターを隠す。マウスを動かすとまた出る。
+hide_when_typing = false
+
+[selection]
+# ダブルクリックの単語選択で区切りとみなす文字(空白は常に区切り)。
+semantic_escape_chars = ",│`|;\"'()[]{}<>"
+# 選択したらすぐクリップボードにコピーする。
+save_to_clipboard = true
+
+[keyboard]
+# キーの割り当て。[[keyboard.bindings]] を並べ、key と mods に action か chars(端末に送る文字列)を書く。
+# 下の既定の割り当てより優先し、同じキーなら後に書いたものが効く。action = "None" で既定の割り当てを外す。
+#   key: 1 文字("C"、"0"、"=" など。英字の大小は区別しない)か、
+#        PageUp PageDown Home End Insert Delete Up Down Left Right Tab Enter Escape Backspace Space F1-F12 Plus Minus Equals
+#   mods: Control / Shift / Alt / Super を | でつなぐ(省略すると修飾キーなし)
+#   mode: "Selection" と書くと、文字を選択しているときだけ効く
+#   action: Copy Paste Search ScrollPageUp ScrollPageDown ScrollLineUp ScrollLineDown ScrollToTop ScrollToBottom
+#           IncreaseFontSize DecreaseFontSize ResetFontSize ToggleFullscreen ClearSelection
+#           NewTab CloseTab NextTab PreviousTab OpenSettings None
+#   スクロールの action は、全画面のプログラム(vim、less など)の中ではキーをそのまま送る。
+#   文字サイズの変更は実行中だけで、font.size は書き換えない。
+#
+# 既定の割り当て:
+#   Control|Shift + C            Copy(Windows では文字を選択しているときの Control + C も)
+#   Control|Shift + V            Paste
+#   Shift + Insert               Paste
+#   Control|Shift + F            Search
+#   Shift + PageUp / PageDown    ScrollPageUp / ScrollPageDown
+#   Control + = / Plus           IncreaseFontSize(Control|Shift + Plus も)
+#   Control + Minus              DecreaseFontSize
+#   Control + 0                  ResetFontSize
+#   Control|Shift + T / W        NewTab / CloseTab
+#   Control + Tab                NextTab(Control|Shift + Tab で PreviousTab)
+#   Control + ,                  OpenSettings
+#
+# 例: F11 で全画面にし、Shift+Insert のペーストを外す。
+# [[keyboard.bindings]]
+# key = "F11"
+# action = "ToggleFullscreen"
+#
+# [[keyboard.bindings]]
+# key = "Insert"
+# mods = "Shift"
+# action = "None"
+#
+# 例: Alt+Enter で ESC と CR を送る。
+# [[keyboard.bindings]]
+# key = "Enter"
+# mods = "Alt"
+# chars = "\u001b\r"

@@ -1,0 +1,66 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check tag matches Cargo.toml version
+        run: |
+          version="$(sed -n '/^\[package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "タグ $GITHUB_REF_NAME と Cargo.toml の version $version が一致しない" >&2
+            exit 1
+          fi
+
+      # MSVC だと MS の CRT/SDK を毎回落とすことになり、build.rs のアイコン埋め込みも gnu 専用なので mingw でクロスビルドする
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mingw-w64 zip
+          rustup update stable
+          rustup default stable
+          rustup target add x86_64-pc-windows-gnu
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: |
+          cargo build --release --locked
+          cargo build --release --locked --target x86_64-pc-windows-gnu
+
+      - name: Package
+        run: |
+          set -eu
+          mkdir dist
+          linux="batune-$GITHUB_REF_NAME-x86_64-linux"
+          mkdir "dist/$linux"
+          cp target/release/batune README.md LICENSE packaging/linux/batune.desktop packaging/linux/batune.png "dist/$linux/"
+          cp fonts/LICENSE "dist/$linux/LICENSE.HackGen"
+          tar -C dist -czf "dist/$linux.tar.gz" "$linux"
+
+          windows="batune-$GITHUB_REF_NAME-x86_64-windows"
+          mkdir "dist/$windows"
+          cp target/x86_64-pc-windows-gnu/release/batune.exe README.md LICENSE "dist/$windows/"
+          cp fonts/LICENSE "dist/$windows/LICENSE.HackGen"
+          (cd dist && zip -r "$windows.zip" "$windows")
+
+          cd dist && sha256sum *.tar.gz *.zip > SHA256SUMS
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prerelease=
+          case "$GITHUB_REF_NAME" in *-*) prerelease=--prerelease ;; esac
+          gh release create "$GITHUB_REF_NAME" $prerelease --verify-tag --generate-notes \
+            --title "batune $GITHUB_REF_NAME" \
+            dist/*.tar.gz dist/*.zip dist/SHA256SUMS

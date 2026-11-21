@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=batune
+GenericName=Terminal
+Comment=GPU terminal with inline images
+Exec=batune
+Icon=batune
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=shell;terminal;ssh;
+StartupWMClass=batune
