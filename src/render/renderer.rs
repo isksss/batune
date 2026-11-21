@@ -355,7 +355,12 @@ impl Renderer {
                     retried = true;
                     self.cache.clear();
                 }
-                Err(AtlasFull) => break,
+                // The build stopped part way; `under` still counts the last
+                // frame's rects, which would draw some of these above glyphs.
+                Err(AtlasFull) => {
+                    self.under = self.rects.len() as u32;
+                    break;
+                }
             }
         }
         self.flush_uploads(queue);
