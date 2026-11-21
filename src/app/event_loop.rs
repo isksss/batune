@@ -133,6 +133,9 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             WindowEvent::Ime(event) if !typing => active.on_ime(event, &self.config),
+            // Minimizing on Windows reports 0x0; fitting the grid to it would
+            // truncate every tab to one cell, and there is no reflow back.
+            WindowEvent::Resized(size) if size.width == 0 || size.height == 0 => {}
             WindowEvent::Resized(size) => {
                 active.gpu.resize(size);
                 active.fit_grid();
