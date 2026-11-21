@@ -305,6 +305,13 @@ impl Handler {
                 self.accepted = Some(key);
                 return Ok(true);
             }
+            host_key::Status::Revoked => {
+                self.out.print(&format!(
+                    "The {algorithm} host key for '{host}' ({fingerprint}) is marked as revoked in {}.\n",
+                    path.display()
+                ));
+                return Err("host key verification failed".into());
+            }
             host_key::Status::Unknown => format!(
                 "The authenticity of host '{host}' can't be established.\n\
                  {algorithm} key fingerprint is {fingerprint}.\n"

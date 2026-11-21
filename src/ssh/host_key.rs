@@ -7,6 +7,8 @@ use russh::keys::{self, Algorithm, HashAlg, PublicKey, known_hosts};
 #[derive(Debug, PartialEq, Eq)]
 pub enum Status {
     Known,
+    /// The key is on a `@revoked` line and must never be accepted.
+    Revoked,
     Unknown,
     /// The host has other keys recorded; the first is on `line` (1-based).
     /// Their algorithm need not match: a host that suddenly offers a new
@@ -20,18 +22,47 @@ pub fn known_hosts_path() -> Option<PathBuf> {
     std::env::home_dir().map(|home| home.join(".ssh").join("known_hosts"))
 }
 
+/// Any recorded key that matches makes the host known, so a host with
+/// several keys of one algorithm (e.g. after a rotation) does not trip
+/// [`Status::Changed`]; russh's own check stops at the first mismatch.
 pub fn check(path: &Path, host: &str, port: u16, key: &PublicKey) -> Result<Status, keys::Error> {
-    match known_hosts::check_known_hosts_path(host, port, key, path) {
-        Ok(true) => Ok(Status::Known),
-        // russh reports `KeyChanged` only for a recorded key of the same
-        // algorithm, so a key of another one would pass as a first visit.
-        Ok(false) => Ok(match recorded(path, host, port)?.first() {
-            Some((line, _)) => Status::Changed { line: *line },
-            None => Status::Unknown,
-        }),
-        Err(keys::Error::KeyChanged { line }) => Ok(Status::Changed { line }),
-        Err(e) => Err(e),
+    if revoked(path)?
+        .iter()
+        .any(|k| k.key_data() == key.key_data())
+    {
+        return Ok(Status::Revoked);
     }
+    let recorded = recorded(path, host, port)?;
+    Ok(
+        if recorded.iter().any(|(_, k)| k.key_data() == key.key_data()) {
+            Status::Known
+        } else if let Some((line, _)) = recorded.first() {
+            Status::Changed { line: *line }
+        } else {
+            Status::Unknown
+        },
+    )
+}
+
+/// Keys on `@revoked` lines, whatever hosts they name: russh skips these
+/// lines (and cannot match their `*` patterns), and a key revoked for one
+/// host is not to be trusted for another. A line that cannot be read is an
+/// error rather than skipped, so that a typo does not silently un-revoke.
+fn revoked(path: &Path) -> Result<Vec<PublicKey>, keys::Error> {
+    // A missing file has no revocations, as russh treats it as empty.
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Ok(Vec::new());
+    };
+    text.lines()
+        .filter_map(|line| line.strip_prefix("@revoked"))
+        .map(|rest| {
+            let mut fields = rest.split_whitespace().skip(1);
+            let (Some(kind), Some(data)) = (fields.next(), fields.next()) else {
+                return Err(keys::Error::CouldNotReadKey);
+            };
+            Ok(PublicKey::from_openssh(&format!("{kind} {data}"))?)
+        })
+        .collect()
 }
 
 /// Keys recorded for the host, with their 1-based lines.
@@ -116,6 +147,29 @@ mod tests {
             check(&path, "h", 22, &key(KEY_B)).unwrap(),
             Status::Changed { line: 2 }
         );
+    }
+
+    #[test]
+    fn any_of_several_keys_of_one_algorithm_makes_the_host_known() {
+        let path = temp_path("several");
+        std::fs::write(&path, format!("h {KEY_A}\nh {KEY_B}\n")).unwrap();
+        assert_eq!(check(&path, "h", 22, &key(KEY_B)).unwrap(), Status::Known);
+        assert_eq!(check(&path, "h", 22, &key(KEY_A)).unwrap(), Status::Known);
+    }
+
+    #[test]
+    fn a_revoked_key_is_refused_even_when_also_recorded() {
+        let path = temp_path("revoked");
+        std::fs::write(&path, format!("h {KEY_A}\n@revoked * {KEY_A}\nh {KEY_B}\n")).unwrap();
+        assert_eq!(check(&path, "h", 22, &key(KEY_A)).unwrap(), Status::Revoked);
+        assert_eq!(check(&path, "h", 22, &key(KEY_B)).unwrap(), Status::Known);
+    }
+
+    #[test]
+    fn an_unreadable_revoked_line_is_an_error() {
+        let path = temp_path("revoked-bad");
+        std::fs::write(&path, format!("@revoked h\nh {KEY_A}\n")).unwrap();
+        assert!(check(&path, "h", 22, &key(KEY_A)).is_err());
     }
 
     const RSA: &str = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC01wxrNnm3Bq2b2iRP9ogF9NB44KMNhchi30/teh79YjYmNzXPZx/Ny+13jYiq+Sch+qQh559Afrh58Im8vcwtAJkXx6/K/Xej9lDJzrTnP9Qltjh+YKpWm5eeAYUDdEvAmdkcFkLwMxrJjI112gFwXvyczOytJSh4cmRT/AFAQw==";
