@@ -78,15 +78,23 @@ pub fn at(term: &Term, at: Point) -> Option<Link> {
     })
 }
 
-/// Every cell of the rows joined by auto-wrap with `line`, in order.
+/// Rows walked each way from the pointer's row when joining wrapped rows.
+/// shortcut: a link longer than this many rows is cut, raise it if one is.
+const MAX_WRAPPED_ROWS: usize = 64;
+
+/// Every cell of the rows joined by auto-wrap with `line`, in order, up to
+/// [`MAX_WRAPPED_ROWS`] each way: this runs on every pointer move while Ctrl
+/// is held, and a scrollback of one wrapped line would be read whole.
 fn logical_line(term: &Term, line: usize) -> Vec<(Point, &Cell)> {
     let mut first = line;
-    while first > 0 && selection::row(term, first - 1).wrapped() {
+    while first > 0 && line - first < MAX_WRAPPED_ROWS && selection::row(term, first - 1).wrapped()
+    {
         first -= 1;
     }
     let mut last = line;
     let count = selection::line_count(term);
-    while last + 1 < count && selection::row(term, last).wrapped() {
+    while last + 1 < count && last - line < MAX_WRAPPED_ROWS && selection::row(term, last).wrapped()
+    {
         last += 1;
     }
     (first..=last)
@@ -149,15 +157,19 @@ fn is_url_char(c: char) -> bool {
 /// closing bracket that has no opening one in the URL (as in
 /// "(see https://example.com)").
 fn trim_end(url: &[char]) -> usize {
+    // Counted once and updated as chars come off; recounting per char is
+    // quadratic on a URL followed by many `)`.
+    let count = |x: char| url.iter().filter(|&&c| c == x).count();
+    let open = [count('('), count('[')];
+    let mut close = [count(')'), count(']')];
     let mut len = url.len();
     while len > 0 {
         let c = url[len - 1];
-        let unbalanced = |open: char, close: char| {
-            c == close
-                && url[..len].iter().filter(|&&x| x == open).count()
-                    < url[..len].iter().filter(|&&x| x == close).count()
-        };
-        if TRAILING.contains(c) || unbalanced('(', ')') || unbalanced('[', ']') {
+        let bracket = [')', ']'].iter().position(|&b| b == c);
+        if TRAILING.contains(c) || bracket.is_some_and(|b| open[b] < close[b]) {
+            if let Some(b) = bracket {
+                close[b] -= 1;
+            }
             len -= 1;
         } else {
             break;
@@ -209,6 +221,26 @@ mod tests {
         );
         assert_eq!(urls("<https://example.com>"), ["https://example.com"]);
         assert_eq!(urls("\"https://example.com\""), ["https://example.com"]);
+    }
+
+    #[test]
+    fn many_closing_brackets_after_a_url_are_trimmed_quickly() {
+        let text = format!("https://a{}", ")".repeat(200_000));
+        let start = std::time::Instant::now();
+        assert_eq!(urls(&text), ["https://a"]);
+        assert_eq!(
+            urls(&format!("https://a({}", ")".repeat(5))),
+            ["https://a()"]
+        );
+        assert!(start.elapsed() < std::time::Duration::from_secs(2));
+    }
+
+    #[test]
+    fn a_long_wrapped_line_is_joined_only_near_the_pointer() {
+        let t = term(10, 500, &"x".repeat(10 * 500));
+        let cells = logical_line(&t, 250);
+        assert_eq!(cells.first().unwrap().0.line, 250 - MAX_WRAPPED_ROWS);
+        assert_eq!(cells.last().unwrap().0.line, 250 + MAX_WRAPPED_ROWS);
     }
 
     #[test]
