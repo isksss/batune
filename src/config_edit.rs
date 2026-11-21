@@ -1,7 +1,7 @@
 //! Writes settings changed in the settings screen back to the file, keeping
 //! the rest of it (comments, order, keys the screen does not show) as is.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use toml_edit::{DocumentMut, Item, Value};
 
@@ -23,7 +23,48 @@ pub fn save(path: &Path, before: &Config, after: &Config) -> Result<(), String> 
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
-    std::fs::write(path, text).map_err(|e| format!("{}: {e}", path.display()))
+    let target = real_path(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    write_replacing(&target, &text).map_err(|e| format!("{}: {e}", target.display()))
+}
+
+/// The file a write to `path` should land in: through any symlinks, so
+/// renaming over it does not replace a link into a dotfiles repository with
+/// a plain file. A missing file (or a link to one) is created where it would
+/// be.
+fn real_path(path: &Path) -> std::io::Result<PathBuf> {
+    match std::fs::canonicalize(path) {
+        Ok(real) => Ok(real),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => match std::fs::read_link(path) {
+            // shortcut: follows one hop of a dangling link, enough for one link to a not yet created file.
+            Ok(link) => Ok(path.parent().unwrap_or(Path::new("")).join(link)),
+            Err(_) => Ok(path.to_path_buf()),
+        },
+        Err(e) => Err(e),
+    }
+}
+
+/// Writes a temporary file beside `target` and renames it over, so a failed
+/// write (a full disk, a crash) leaves the old file whole instead of empty
+/// or cut short.
+fn write_replacing(target: &Path, text: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    let name = target.file_name().unwrap_or_default().to_string_lossy();
+    let tmp = target.with_file_name(format!(".{name}.{}.tmp", std::process::id()));
+    let result = (|| {
+        let mut file = std::fs::File::create(&tmp)?;
+        file.write_all(text.as_bytes())?;
+        // The new file would otherwise get the default mode and could make
+        // a file the user had kept private readable by others.
+        if let Ok(meta) = std::fs::metadata(target) {
+            file.set_permissions(meta.permissions())?;
+        }
+        file.sync_all()?;
+        std::fs::rename(&tmp, target)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    result
 }
 
 /// `text` with the changed values written in, checked as the file would be
@@ -222,6 +263,50 @@ mod tests {
         after = before.clone();
         after.window.padding = f32::MAX;
         assert!(apply("", &before, &after).unwrap_err().contains("padding"));
+    }
+
+    #[test]
+    fn saving_replaces_the_file_whole_and_leaves_no_temporary_file() {
+        let dir =
+            std::env::temp_dir().join(format!("batune-config-replace-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(&path, FILE).unwrap();
+        let before = Config::parse(FILE).unwrap();
+        let mut after = before.clone();
+        after.font.size = 20.0;
+        save(&path, &before, &after).unwrap();
+        let written = std::fs::read_to_string(&path).unwrap();
+        let entries = std::fs::read_dir(&dir).unwrap().count();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(Config::parse(&written).unwrap(), after);
+        assert_eq!(entries, 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn saving_through_a_symlink_writes_the_linked_file_and_keeps_the_link() {
+        let dir = std::env::temp_dir().join(format!("batune-config-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("dotfiles")).unwrap();
+        let real = dir.join("dotfiles").join("batune.toml");
+        let link = dir.join("config.toml");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let before = Config::default();
+        let mut after = before.clone();
+        after.scrolling.multiplier = 5;
+        // The linked file does not exist yet, then it does.
+        save(&link, &before, &after).unwrap();
+        let first = std::fs::read_to_string(&real);
+        let before = after.clone();
+        after.scrolling.multiplier = 7;
+        save(&link, &before, &after).unwrap();
+        let second = std::fs::read_to_string(&real);
+        let still_link = std::fs::symlink_metadata(&link).map(|m| m.file_type().is_symlink());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(first.unwrap(), "[scrolling]\nmultiplier = 5\n");
+        assert_eq!(second.unwrap(), "[scrolling]\nmultiplier = 7\n");
+        assert!(still_link.unwrap());
     }
 
     #[test]
