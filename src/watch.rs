@@ -41,8 +41,10 @@ pub fn watch(
     Ok(watcher)
 }
 
-/// Removal is ignored so that deleting the file (or the first half of a
-/// rename-based save) does not snap the window back to the defaults.
+/// Removal is ignored so that deleting the file does not snap the window
+/// back to the defaults. Renaming it away still counts as a change to it
+/// (notify reports the old name as modified), so the reload itself skips a
+/// file that is gone.
 fn is_change_to(event: &notify::Event, target: &Path) -> bool {
     matches!(event.kind, EventKind::Create(_) | EventKind::Modify(_))
         && event

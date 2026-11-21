@@ -11,8 +11,8 @@ use crate::config::Config;
 /// file at `path`, creating it if missing. Nothing is written when the
 /// result would not load, and the message says why.
 ///
-/// The running windows pick the file up through the watch, as they would an
-/// edit made in a text editor.
+/// The caller tells the running windows to reload; the watch alone misses a
+/// file whose directory did not exist at startup.
 pub fn save(path: &Path, before: &Config, after: &Config) -> Result<(), String> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
