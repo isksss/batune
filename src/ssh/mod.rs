@@ -290,6 +290,10 @@ async fn shell(
         code: None,
         signal: None,
     };
+    // A write waits for the server's window; reading on meanwhile keeps a
+    // server that echoes a large paste from waiting on us in turn. Input is
+    // not read while a write is pending, so it stays in order.
+    let mut sending = None;
     loop {
         tokio::select! {
             msg = read.wait() => match msg {
@@ -304,8 +308,12 @@ async fn shell(
                 Some(ChannelMsg::Close) | None => break,
                 Some(_) => {}
             },
-            input = keys.rx.recv() => match input {
-                Some(Input::Data(bytes)) => write.data_bytes(bytes).await?,
+            result = async { sending.as_mut().unwrap().await }, if sending.is_some() => {
+                result?;
+                sending = None;
+            }
+            input = keys.rx.recv(), if sending.is_none() => match input {
+                Some(Input::Data(bytes)) => sending = Some(Box::pin(write.data_bytes(bytes))),
                 Some(Input::Resize(size)) => {
                     keys.size = size;
                     write
