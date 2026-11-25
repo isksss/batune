@@ -112,6 +112,50 @@ pub struct Renderer {
     under: u32,
 }
 
+/// Returns a builder of pipelines that draw one triangle strip per instance
+/// of `stride` bytes, blended over `format` with premultiplied alpha.
+pub(crate) fn instanced_pipelines<'a>(
+    device: &'a wgpu::Device,
+    layout: &'a wgpu::PipelineLayout,
+    shader: &'a wgpu::ShaderModule,
+    format: wgpu::TextureFormat,
+) -> impl Fn(&str, &str, &str, &[wgpu::VertexAttribute], usize) -> wgpu::RenderPipeline + 'a {
+    move |label, vs, fs, attributes, stride| {
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some(label),
+            layout: Some(layout),
+            vertex: wgpu::VertexState {
+                module: shader,
+                entry_point: Some(vs),
+                compilation_options: Default::default(),
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: stride as u64,
+                    step_mode: wgpu::VertexStepMode::Instance,
+                    attributes,
+                })],
+            },
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: Default::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: shader,
+                entry_point: Some(fs),
+                compilation_options: Default::default(),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format,
+                    blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            multiview_mask: None,
+            cache: None,
+        })
+    }
+}
+
 impl Renderer {
     /// `format` is the color format of the textures passed to `render` /
     /// used by the pass given to `draw`. Sizes in `font` are logical pixels.
@@ -165,40 +209,7 @@ impl Renderer {
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
-        let pipeline = |label, vs, fs, attributes: &[wgpu::VertexAttribute], stride| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&layout),
-                vertex: wgpu::VertexState {
-                    module: &shader,
-                    entry_point: Some(vs),
-                    compilation_options: Default::default(),
-                    buffers: &[Some(wgpu::VertexBufferLayout {
-                        array_stride: stride as u64,
-                        step_mode: wgpu::VertexStepMode::Instance,
-                        attributes,
-                    })],
-                },
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleStrip,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: Default::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: &shader,
-                    entry_point: Some(fs),
-                    compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview_mask: None,
-                cache: None,
-            })
-        };
+        let pipeline = instanced_pipelines(device, &layout, &shader, format);
         let rect_pipeline = pipeline(
             "batune-render rects",
             "vs_rect",

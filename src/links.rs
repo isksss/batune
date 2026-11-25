@@ -23,7 +23,7 @@ pub struct Link {
     pub range: Range,
 }
 
-pub fn openable(uri: &str) -> bool {
+fn openable(uri: &str) -> bool {
     SCHEMES.iter().any(|s| {
         uri.get(..s.len())
             .is_some_and(|p| p.eq_ignore_ascii_case(s))
@@ -109,7 +109,7 @@ fn logical_line(term: &Term, line: usize) -> Vec<(Point, &Cell)> {
 }
 
 /// Char index ranges `start..end` of the URLs in `text`.
-pub fn find_urls(text: &[char]) -> Vec<(usize, usize)> {
+fn find_urls(text: &[char]) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < text.len() {

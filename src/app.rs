@@ -10,12 +10,10 @@ use winit::event_loop::{ActiveEventLoop, EventLoopProxy};
 use winit::keyboard::ModifiersState;
 use winit::window::{CursorIcon, Fullscreen, Window};
 
-use crate::background;
 use crate::blink::{Blink, Timing};
 use crate::chrome;
 use crate::clipboard::{self, Clipboard};
 use crate::config::{self, Changes, Config, Profile, StartupMode};
-use crate::frame::{self, View};
 use crate::gpu::{self, Gpu};
 use crate::icon;
 use crate::ime::{self, Preedit};
@@ -33,10 +31,14 @@ use crate::tab_bar::{self, Clicked};
 use crate::ui::Ui;
 use crate::vt::{CursorStyle, Event as VtEvent, Modes, Term};
 
+use self::view::View;
+
+mod background;
 mod event_loop;
 mod keys;
 mod pointer;
 mod tab;
+mod view;
 
 /// How often to ask whether the shell has exited. ConPTY may keep the
 /// output pipe open after the child exits, so `Closed` alone is not enough.
@@ -591,7 +593,7 @@ impl Active {
             flash: self.bell.is_some(),
             cursor_blinked_off: !self.blink.visible(),
         };
-        let mut frame = frame::build(&tab.term, palette, view);
+        let mut frame = view::build(&tab.term, palette, view);
         let mut anchor = (
             clamp_u16(tab.term.cursor().col),
             clamp_u16(tab.term.cursor().row + tab.term.display_offset()),

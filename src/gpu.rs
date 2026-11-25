@@ -162,15 +162,17 @@ impl Gpu {
         (m.width, m.height)
     }
 
-    /// Size of the grid area in physical pixels, for programs that ask the
-    /// PTY for it.
-    pub fn grid_pixels(&self, cols: u16, rows: u16) -> (u16, u16) {
+    /// The PTY size of a `cols` × `rows` grid, with its area in physical
+    /// pixels for programs that ask for it.
+    pub fn pty_size(&self, cols: u16, rows: u16) -> crate::pty::Size {
         let m = self.renderer.cell_metrics();
         let clamp = |v: u32| u16::try_from(v).unwrap_or(u16::MAX);
-        (
-            clamp(m.width * u32::from(cols)),
-            clamp(m.height * u32::from(rows)),
-        )
+        crate::pty::Size {
+            rows,
+            cols,
+            pixel_width: clamp(m.width * u32::from(cols)),
+            pixel_height: clamp(m.height * u32::from(rows)),
+        }
     }
 
     /// Top-left corner and size of the cell at (`col`, `row`) in physical
