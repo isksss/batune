@@ -133,12 +133,16 @@ impl Decoder {
         }
     }
 
-    /// The decoded image; pixels never drawn get `background` unless P2
-    /// asked for transparency. `None` when nothing was drawn and no size
-    /// was given.
+    /// The decoded image, as large as the raster attributes declared or the
+    /// drawing reached, whichever is larger; pixels never drawn get
+    /// `background` unless P2 asked for transparency. `None` when no pixel
+    /// was drawn, even if a size was declared.
     pub(crate) fn finish(mut self, background: [u8; 3]) -> Option<Image> {
         if let Some(command) = self.command.take() {
             self.apply(command);
+        }
+        if self.extent.1 == 0 {
+            return None;
         }
         let width = self.raster.0.max(self.extent.0);
         let height = self.raster.1.max(self.extent.1);
@@ -189,9 +193,9 @@ impl Decoder {
             Command::Raster if !self.drawn => {
                 // Pan;Pad (the pixel aspect ratio) are ignored as in foot
                 // and wezterm: pixels are square on today's screens.
-                let size = (self.param(2).min(MAX_SIDE), self.param(3).min(MAX_SIDE));
-                self.raster = size;
-                self.reserve(size.0, size.1);
+                // Not reserved here: a declared size alone must not cost
+                // memory, so only `sixel` grows the buffer.
+                self.raster = (self.param(2).min(MAX_SIDE), self.param(3).min(MAX_SIDE));
             }
             Command::Raster => {}
         }
@@ -345,6 +349,16 @@ mod tests {
     #[test]
     fn nothing_drawn_yields_no_image() {
         assert!(decode(true, "#1;2;1;2;3$-").is_none());
+    }
+
+    #[test]
+    fn a_declared_size_alone_allocates_nothing_and_yields_no_image() {
+        let mut d = Decoder::new(false);
+        for &b in b"\"1;1;4096;4096?$-" {
+            d.put(b);
+        }
+        assert!(d.pixels.is_empty());
+        assert!(d.finish(BG).is_none());
     }
 
     #[test]
