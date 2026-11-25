@@ -345,3 +345,16 @@ fn cells_without_an_image_stop_being_cached_at_the_cap() {
         "drawn glyphs are still cached"
     );
 }
+
+#[test]
+fn block_elements_fill_the_cell_whatever_the_line_height() {
+    let mut fonts = Fonts::new(None, 28.0);
+    fonts.set_spacing(1.2, 1.5);
+    fonts.set_size(28.0);
+    let m = fonts.cell_metrics();
+    let [g] = &fonts.rasterize(&key('\u{2588}'))[..] else {
+        panic!("one image expected");
+    };
+    assert_eq!((g.width, g.height), (m.width, m.height));
+    assert_eq!((g.left, g.top), (-m.glyph_x, m.baseline as i32));
+}
