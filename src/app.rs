@@ -51,6 +51,8 @@ pub enum UserEvent {
     /// `Tab::output`.
     Output(u64),
     ConfigChanged,
+    /// A background job of an egui screen has finished.
+    Redraw,
 }
 
 /// The window and what all its tabs share.

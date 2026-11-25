@@ -29,6 +29,7 @@ mod ssh;
 mod tab_bar;
 mod theme;
 mod ui;
+mod update;
 mod watch;
 mod wsl;
 
@@ -46,6 +47,8 @@ const USAGE: &str =
 pub fn run() {
     #[cfg(all(windows, not(debug_assertions)))]
     report_panics_in_message_box();
+    #[cfg(windows)]
+    update::remove_old();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
     // `None` is a local session; which profile needs the config to tell.
