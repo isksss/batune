@@ -4,6 +4,8 @@
 //! [`ImageCell`] naming the placement and the cell's offset inside it. The
 //! image therefore scrolls, moves into the scrollback and disappears with
 //! the cells, and printing or erasing over a cell removes that piece.
+//! kitty placements are the exception: kitty draws them on a layer of their
+//! own, so printing and erasing keep them (see `ImageCell::layered`).
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -133,6 +135,7 @@ struct Placed {
     id: u64,
     image: Arc<Image>,
     placement: Placement,
+    layered: bool,
 }
 
 /// The piece of a placed image that one cell shows.
@@ -163,6 +166,12 @@ impl ImageCell {
     /// Unique within the process for each [`Term::place_image`](crate::vt::Term::place_image) call.
     pub(crate) fn placement_id(&self) -> u64 {
         self.placed.id
+    }
+
+    /// Whether printing and erasing leave this piece in place (kitty
+    /// graphics). Other images belong to the text they replaced.
+    pub(crate) fn layered(&self) -> bool {
+        self.placed.layered
     }
 
     /// The cell's column and row inside the placement.
@@ -202,13 +211,14 @@ impl ImageCell {
 pub(crate) struct PlacedCells(Arc<Placed>);
 
 impl PlacedCells {
-    pub(crate) fn new(image: Arc<Image>, placement: Placement) -> Self {
+    pub(crate) fn new(image: Arc<Image>, placement: Placement, layered: bool) -> Self {
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         Self(Arc::new(Placed {
             id,
             image,
             placement,
+            layered,
         }))
     }
 

@@ -135,7 +135,7 @@ impl Term {
             // replaces it.
             self.kitty_delete_placements(|q| q.image == Some(i) && q.placement == Some(p));
         }
-        let cells = self.put_image(image, placement);
+        let cells = self.put_image(image, placement, true);
         self.kitty.placements.push(Placed {
             image: id,
             placement: keys.placement,

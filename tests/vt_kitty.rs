@@ -306,3 +306,68 @@ fn a_huge_column_count_is_capped_at_1000_columns() {
     let cell = t.cell(0, 7).image().unwrap();
     assert_eq!(cell.uv()[2], 8.0 / 1000.0);
 }
+
+/// Places a stored 3x3 image over 2x2 cells at the top left, as herdr does:
+/// between DECSC and DECRC, with the cursor kept (`C=1`).
+fn placed_over_text() -> Term {
+    let mut t = term(6, 4);
+    t.advance(b"abcdef\r\nghijkl");
+    t.advance(apc(&format!("a=t,s=3,v=3,i=1,q=2;{}", pixels(3, 3))).as_bytes());
+    t.advance(format!("\x1b7\x1b[H{}\x1b8", apc("a=p,i=1,p=1,c=2,r=2,C=1,q=2")).as_bytes());
+    t
+}
+
+#[test]
+fn a_placement_keeps_the_text_under_it() {
+    let t = placed_over_text();
+    assert_eq!(t.grid().row(0).text(), "abcdef");
+    assert_eq!(t.grid().row(1).text(), "ghijkl");
+    assert!(t.cell(1, 1).image().is_some());
+}
+
+#[test]
+fn printing_or_erasing_over_a_placement_does_not_remove_it() {
+    let mut t = placed_over_text();
+    // A redraw: home, print over the image, erase the rest of the line,
+    // erase characters, then erase below.
+    t.advance(b"\x1b[Hxy\x1b[K\r\n\x1b[2X\x1b[1K\x1b[J\x1b[2K");
+    assert_eq!(picture(&t), ["##", "##", "", ""]);
+    assert_eq!(t.grid().row(0).text(), "xy");
+}
+
+#[test]
+fn inserting_or_deleting_characters_moves_the_text_under_a_placement() {
+    let mut t = placed_over_text();
+    t.advance(b"\x1b[H\x1b[2P\x1b[2;1H\x1b[1@");
+    assert_eq!(picture(&t), ["##ef", "##hijk", "", ""]);
+    assert_eq!(t.grid().row(0).text(), "cdef");
+    assert_eq!(t.grid().row(1).text(), " ghijk");
+}
+
+#[test]
+fn a_placement_goes_with_a_clear_screen_or_reset() {
+    for clear in ["\x1b[2J", "\x1bc"] {
+        let mut t = placed_over_text();
+        t.advance(clear.as_bytes());
+        assert_eq!(picture(&t), ["", "", "", ""], "{clear:?}");
+    }
+}
+
+#[test]
+fn a_placement_scrolls_with_the_text() {
+    let mut t = placed_over_text();
+    t.advance(b"\x1b[4H\n");
+    assert_eq!(picture(&t), ["##ijkl", "", "", ""]);
+}
+
+#[test]
+fn printing_over_other_images_still_removes_them() {
+    let mut t = term(6, 4);
+    let image = batune::vt::Image::from_rgba(1, 1, vec![0; 4]).unwrap();
+    t.place_image(
+        std::sync::Arc::new(image),
+        batune::vt::Placement::new(2.0, 1.0),
+    );
+    t.advance(b"\x1b[Hx\x1b[K");
+    assert_eq!(picture(&t), ["x", "", "", ""]);
+}

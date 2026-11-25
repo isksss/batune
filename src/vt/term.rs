@@ -483,7 +483,7 @@ impl Term {
     /// Columns past the right edge are cut; rows past the bottom scroll the
     /// screen (or are cut with [`ImageCursor::Stay`]).
     pub fn place_image(&mut self, image: Arc<Image>, placement: Placement) {
-        self.put_image(image, placement);
+        self.put_image(image, placement, false);
     }
 
     /// Events since the previous call, oldest first.
@@ -616,8 +616,16 @@ impl Term {
             }
             _ => return,
         };
+        let cols = self.cols();
         for r in rows {
-            self.grid.row_mut(r).reset(bg);
+            let line = self.grid.row_mut(r);
+            // Only a full clear takes kitty placements with it, as in kitty.
+            if mode == 2 {
+                line.reset(bg);
+            } else {
+                line.erase(0..cols, bg);
+                line.set_wrapped(false);
+            }
         }
     }
 
@@ -634,7 +642,10 @@ impl Term {
                 line.set_wrapped(false);
             }
             1 => line.erase(0..col + 1, bg),
-            2 => line.reset(bg),
+            2 => {
+                line.erase(0..cols, bg);
+                line.set_wrapped(false);
+            }
             _ => {}
         }
     }
@@ -662,11 +673,11 @@ impl Term {
         let cols = self.cols();
         let bg = self.cursor.pen.bg;
         if col > 0 && self.grid.cell(row, col).flags.contains(Flags::WIDE_SPACER) {
-            *self.grid.cell_mut(row, col - 1) = Cell::blank(bg);
+            self.grid.cell_mut(row, col - 1).erase(bg);
         }
         let last = col + width - 1;
         if last + 1 < cols && self.grid.cell(row, last).flags.contains(Flags::WIDE) {
-            *self.grid.cell_mut(row, last + 1) = Cell::blank(bg);
+            self.grid.cell_mut(row, last + 1).erase(bg);
         }
     }
 

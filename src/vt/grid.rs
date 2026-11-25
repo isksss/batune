@@ -52,27 +52,53 @@ impl Row {
         self.wrapped = false;
     }
 
+    /// Blanks `cols`, keeping kitty placements; [`Row::reset`] removes them.
     pub(crate) fn erase(&mut self, cols: Range<usize>, bg: Color) {
-        self.cells[cols].fill(Cell::blank(bg));
+        for cell in &mut self.cells[cols] {
+            cell.erase(bg);
+        }
         self.repair_wide(bg);
     }
 
     /// Shifts cells from `col` right by `n`; cells pushed past the edge are lost.
     pub(crate) fn insert_blank(&mut self, col: usize, n: usize, bg: Color) {
-        let n = n.min(self.cells.len() - col);
-        self.cells[col..].rotate_right(n);
-        self.cells[col..col + n].fill(Cell::blank(bg));
+        self.keep_layer(|cells| {
+            let n = n.min(cells.len() - col);
+            cells[col..].rotate_right(n);
+            cells[col..col + n].fill(Cell::blank(bg));
+        });
         self.repair_wide(bg);
     }
 
     /// Removes `n` cells at `col`, pulling the rest left and filling the end
     /// with blanks.
     pub(crate) fn delete(&mut self, col: usize, n: usize, bg: Color) {
-        let len = self.cells.len();
-        let n = n.min(len - col);
-        self.cells[col..].rotate_left(n);
-        self.cells[len - n..].fill(Cell::blank(bg));
+        self.keep_layer(|cells| {
+            let len = cells.len();
+            let n = n.min(len - col);
+            cells[col..].rotate_left(n);
+            cells[len - n..].fill(Cell::blank(bg));
+        });
         self.repair_wide(bg);
+    }
+
+    /// Runs `shift` and puts kitty placements back in the columns they had:
+    /// in kitty the text moves under them.
+    fn keep_layer(&mut self, shift: impl FnOnce(&mut [Cell])) {
+        if !self
+            .cells
+            .iter()
+            .any(|c| c.image().is_some_and(ImageCell::layered))
+        {
+            return shift(&mut self.cells);
+        }
+        let layer: Vec<_> = self.cells.iter().map(Cell::layered_image).collect();
+        shift(&mut self.cells);
+        for (cell, image) in self.cells.iter_mut().zip(layer) {
+            if image.is_some() || cell.image().is_some_and(ImageCell::layered) {
+                cell.set_image(image);
+            }
+        }
     }
 
     /// Blanks halves of wide characters whose other half was erased or
@@ -87,7 +113,7 @@ impl Row {
             let orphan_spacer = flags.contains(Flags::WIDE_SPACER)
                 && !(i > 0 && self.cells[i - 1].flags.contains(Flags::WIDE));
             if orphan_head || orphan_spacer {
-                self.cells[i] = Cell::blank(bg);
+                self.cells[i].erase(bg);
             }
         }
     }

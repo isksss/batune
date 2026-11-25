@@ -4,7 +4,7 @@ use unicode_width::UnicodeWidthChar;
 use vte::{Params, Perform};
 
 use super::{Charset, Event, MAX_TITLE_BYTES, Term, arg};
-use crate::vt::cell::{Cell, Flags};
+use crate::vt::cell::Flags;
 use crate::vt::sgr;
 use crate::vt::sixel;
 
@@ -40,7 +40,8 @@ impl Perform for Term {
                 // left blank and the character starts the next row.
                 let (row, col) = (self.cursor.row, self.cursor.col);
                 self.clear_wide_halves(row, col, 1);
-                *self.grid.cell_mut(row, col) = Cell::blank(self.cursor.pen.bg);
+                let bg = self.cursor.pen.bg;
+                self.grid.cell_mut(row, col).erase(bg);
                 self.wrap();
             } else {
                 self.cursor.col = cols - width;
