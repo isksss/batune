@@ -23,7 +23,15 @@ Microsoft Store 向けの MSIX は `scripts/package-msix.sh <batune.exe> <out.ms
 
 `Cargo.toml` の `[package]` の `version` と同じ `v<version>` のタグを push すると、GitHub Actions(`.github/workflows/release.yml`)が Linux x86_64 の `tar.gz` と Windows x86_64 の `zip`、`SHA256SUMS` を作って GitHub Release に添付します。`v0.2.0-rc.1` のように `-` を含むタグはプレリリースになります。
 
+リリースは git flow([ブランチ運用](#ブランチ運用))に従います。
+
+1. `develop` から `release/v<version>` を切り、`Cargo.toml` の `version` を上げる
+2. `release/v<version>` から `main` へ PR を出してマージする
+3. `main` のマージコミットにタグを付けて push する
+4. `main` から `develop` へ PR を出してマージし、リリースでの変更を戻す
+
 ```sh
+git switch main && git pull
 git tag v0.1.0
 git push origin v0.1.0
 ```
@@ -205,6 +213,18 @@ cargo test
 | `src/render` | wgpu によるセルグリッドの描画 |
 | `src/pty` | Linux の PTY / Windows の ConPTY |
 | `src/app` ほか `src/` 直下 | ウィンドウ・タブ・設定・SSH などのアプリ本体(`src/main.rs` がバイナリ `batune`) |
+
+### ブランチ運用
+
+git flow で開発します。`main` と `develop` へは直接 push できず、PR をマージコミットで取り込みます(squash / rebase マージは無効)。マージ済みのブランチは自動で消えます。
+
+| ブランチ | 切り出し元 | マージ先 | 用途 |
+|---|---|---|---|
+| `main` | - | - | リリース済みのコード。リリースごとに `v<version>` タグを付ける |
+| `develop` | `main` | - | 次のリリースに向けた統合ブランチ(デフォルトブランチ) |
+| `feature/<名前>` | `develop` | `develop` | 機能追加・修正 |
+| `release/v<version>` | `develop` | `main`、`develop` | リリース準備(バージョン更新など) |
+| `hotfix/v<version>` | `main` | `main`、`develop` | リリース済み版の緊急修正 |
 
 ## ライセンス
 
