@@ -16,7 +16,7 @@ line_height = 1.0
 cell_width = 1.0
 
 [colors]
-# 組み込みテーマ: batune-dark, batune-light, solarized-dark, solarized-light, gruvbox-dark
+# 組み込みテーマ: batune-dark, batune-light, solarized-dark, solarized-light, gruvbox-dark, tokyo-night
 theme = "batune-dark"
 # テーマの色を個別に上書きする。
 # foreground = "#d8d8d8"
