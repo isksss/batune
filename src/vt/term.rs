@@ -20,6 +20,8 @@ mod images;
 mod mode_switch;
 mod perform;
 mod reply;
+#[cfg(test)]
+mod tests;
 
 /// Something the host should react to, reported through [`Term::drain_events`].
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,10 +113,12 @@ struct SavedCursor {
 pub struct Term {
     // vte buffers a whole OSC before dispatching it, without a bound: its
     // `Parser<N>` limit only exists without the `std` feature, as an inline
-    // array of N bytes, and OSC 1337 inline images need several MiB. So the
-    // payloads are bounded where they are kept (title, clipboard, images),
-    // not while they are parsed.
+    // array of N bytes, and OSC 1337 inline images need several MiB. So
+    // `feed` cuts OSCs off at MAX_OSC_BYTES instead.
     parser: Parser,
+    osc: OscScan,
+    /// Set while the OSC being parsed must not be dispatched.
+    osc_rejected: bool,
     grid: Grid,
     cursor: Cursor,
     modes: Modes,
@@ -151,6 +155,28 @@ pub struct Term {
 }
 
 const TAB_WIDTH: usize = 8;
+
+/// Longest OSC passed to vte, in bytes: room for an OSC 1337 image of
+/// 24 MiB. Longer ones are dropped whole.
+const MAX_OSC_BYTES: usize = 32 << 20;
+/// Parameters vte keeps per OSC; it silently drops the bytes after the
+/// 16th `;`, so such OSCs are dropped whole rather than acted on cut.
+const MAX_OSC_PARAMS: usize = 16;
+
+/// Where the fed bytes stand with respect to OSC strings. Tracked beside
+/// vte because vte has no hook to bound or cancel an OSC.
+#[derive(Clone, Copy, Debug)]
+enum OscScan {
+    Other,
+    /// Right after ESC.
+    Escape,
+    Osc {
+        len: usize,
+        params: usize,
+    },
+    /// The rest of an OSC cut off at [`MAX_OSC_BYTES`], not given to vte.
+    Discard,
+}
 
 /// Longest window title (OSC 0/2) kept, in bytes.
 const MAX_TITLE_BYTES: usize = 4096;
@@ -191,6 +217,8 @@ impl Term {
         let rows = rows.max(1);
         Self {
             parser: Parser::new(),
+            osc: OscScan::Other,
+            osc_rejected: false,
             grid: Grid::new(cols, rows),
             cursor: Cursor::default(),
             modes: Modes::default(),
@@ -233,7 +261,7 @@ impl Term {
             // vte ignores APCs, so it gets the bytes up to the end of each
             // kitty APC before the command runs at the cursor it leaves.
             let (n, body) = apc.scan(rest);
-            parser.advance(self, &rest[..n]);
+            self.feed(&mut parser, &rest[..n]);
             rest = &rest[n..];
             if let Some(body) = body {
                 self.kitty_command(&body);
@@ -241,6 +269,59 @@ impl Term {
         }
         self.apc = apc;
         self.parser = parser;
+    }
+
+    /// Gives `bytes` to vte, rejecting OSCs over [`MAX_OSC_BYTES`] or with
+    /// more than [`MAX_OSC_PARAMS`] parameters.
+    fn feed(&mut self, parser: &mut Parser, bytes: &[u8]) {
+        let mut start = 0;
+        for (i, &b) in bytes.iter().enumerate() {
+            self.osc = match (self.osc, b) {
+                (OscScan::Discard, 0x07 | 0x18 | 0x1a) => {
+                    start = i + 1;
+                    OscScan::Other
+                }
+                (OscScan::Discard, 0x1b) => {
+                    start = i;
+                    OscScan::Escape
+                }
+                (OscScan::Discard, _) => {
+                    start = i + 1;
+                    OscScan::Discard
+                }
+                (OscScan::Osc { .. }, 0x07 | 0x18 | 0x1a) => OscScan::Other,
+                (_, 0x1b) => OscScan::Escape,
+                (OscScan::Escape, b']') => {
+                    // The previous OSC must be dispatched before its flag
+                    // is cleared.
+                    parser.advance(self, &bytes[start..=i]);
+                    start = i + 1;
+                    self.osc_rejected = false;
+                    OscScan::Osc { len: 0, params: 1 }
+                }
+                // vte runs C0 controls inside an escape without leaving it.
+                (OscScan::Escape, 0x00..=0x17 | 0x19 | 0x1c..=0x1f | 0x7f) => OscScan::Escape,
+                (OscScan::Osc { len, params }, _) if len < MAX_OSC_BYTES => {
+                    let params = params + usize::from(b == b';');
+                    self.osc_rejected |= params > MAX_OSC_PARAMS;
+                    OscScan::Osc {
+                        len: len + 1,
+                        params,
+                    }
+                }
+                (OscScan::Osc { .. }, _) => {
+                    parser.advance(self, &bytes[start..i]);
+                    // vte has no abort: CAN ends the OSC by dispatching what
+                    // it has, which `osc_rejected` makes a no-op.
+                    self.osc_rejected = true;
+                    parser.advance(self, &[0x18]);
+                    start = i + 1;
+                    OscScan::Discard
+                }
+                _ => OscScan::Other,
+            };
+        }
+        parser.advance(self, &bytes[start..]);
     }
 
     /// Resizes the screen without reflowing text.
@@ -350,9 +431,15 @@ impl Term {
 
     /// Changes how many rows of scrollback are kept (default
     /// [`DEFAULT_SCROLLBACK`](crate::vt::DEFAULT_SCROLLBACK)); excess rows are
-    /// dropped, oldest first. 0 disables the scrollback.
+    /// dropped, oldest first. 0 disables the scrollback. Applies to the
+    /// primary screen even while the alternate screen is shown.
     pub fn set_scrollback_limit(&mut self, limit: usize) {
-        self.grid.set_scrollback_limit(limit);
+        let primary = if self.alt_screen {
+            &mut self.inactive
+        } else {
+            &mut self.grid
+        };
+        primary.set_scrollback_limit(limit);
     }
 
     /// Takes the bytes that must be written back to the application.

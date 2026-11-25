@@ -3,7 +3,7 @@
 
 use std::io::Cursor;
 
-use crate::vt::image::{Image, MAX_IMAGE_CELLS, MAX_IMAGE_PIXELS};
+use crate::vt::image::{DEFAULT_IMAGE_MEMORY_LIMIT, Image, MAX_IMAGE_CELLS, MAX_IMAGE_PIXELS};
 
 /// `width=` / `height=`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -30,13 +30,16 @@ impl Dimension {
     }
 
     /// In pixels; `whole` is the terminal's size in pixels along this axis.
+    /// Capped far above any screen so that the sizing arithmetic stays
+    /// finite: `width=1e38` overflows to infinity, then NaN.
     fn pixels(self, cell: f32, whole: f32) -> Option<f32> {
-        match self {
-            Self::Auto => None,
-            Self::Cells(n) => Some(n * cell),
-            Self::Pixels(n) => Some(n),
-            Self::Percent(p) => Some(p / 100.0 * whole),
-        }
+        let px = match self {
+            Self::Auto => return None,
+            Self::Cells(n) => n * cell,
+            Self::Pixels(n) => n,
+            Self::Percent(p) => p / 100.0 * whole,
+        };
+        Some(px.min(1e9))
     }
 }
 
@@ -93,6 +96,8 @@ pub(crate) fn decode(data: &[u8]) -> Option<Image> {
     let mut limits = image::Limits::default();
     limits.max_image_width = Some(1 << 15);
     limits.max_image_height = Some(1 << 15);
+    // The default allows 512 MiB, twice what the store keeps of all images.
+    limits.max_alloc = Some(DEFAULT_IMAGE_MEMORY_LIMIT as u64);
     reader.limits(limits);
     let mut img = reader.decode().ok()?;
     if u64::from(img.width()) * u64::from(img.height()) > MAX_IMAGE_PIXELS {
@@ -181,5 +186,17 @@ mod tests {
     fn images_wider_than_the_terminal_are_shrunk() {
         let f = file("inline=1;width=200%");
         assert_eq!(size_in_cells(&f, (40, 32), (8, 16), (80, 24)), (80.0, 32.0));
+    }
+
+    #[test]
+    fn sizes_too_large_for_f32_still_give_a_finite_size() {
+        for args in [
+            "inline=1;width=1e38",
+            "inline=1;height=1e38",
+            "inline=1;width=1e38;height=1e38;preserveAspectRatio=0",
+        ] {
+            let (w, h) = size_in_cells(&file(args), (40, 32), (8, 16), (80, 24));
+            assert!(w.is_finite() && h.is_finite(), "{args}: {w} x {h}");
+        }
     }
 }

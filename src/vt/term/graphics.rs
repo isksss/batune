@@ -8,6 +8,11 @@ use super::Term;
 use crate::vt::image::{Image, ImageCell, ImageCursor, MAX_IMAGE_CELLS, Placement};
 use crate::vt::kitty::{self, Assembler, Command, Keys};
 
+/// Most transmitted images kept. Lookups by id scan the list, so a stream
+/// of tiny images must not grow it without bound; kitty's own limit is by
+/// bytes only, but no real program keeps this many.
+pub(super) const MAX_STORED_IMAGES: usize = 4096;
+
 /// kitty graphics state kept by the terminal.
 #[derive(Debug, Default)]
 pub(super) struct Kitty {
@@ -254,16 +259,19 @@ impl Term {
     }
 
     /// Stored images count against the image memory limit on their own,
-    /// since they are kept even when shown nowhere. The oldest go first.
+    /// since they are kept even when shown nowhere, and against
+    /// [`MAX_STORED_IMAGES`]. The oldest go first.
     fn kitty_enforce_limit(&mut self) {
         let limit = self.images.limit();
         let mut total: usize = self.kitty.images.iter().map(|s| s.image.rgba().len()).sum();
+        let mut count = self.kitty.images.len();
         let mut evict = Vec::new();
         for s in &self.kitty.images {
-            if total <= limit {
+            if total <= limit && count <= MAX_STORED_IMAGES {
                 break;
             }
             total -= s.image.rgba().len();
+            count -= 1;
             evict.push(s.id);
         }
         self.kitty_delete_images(|s| evict.contains(&s.id));
