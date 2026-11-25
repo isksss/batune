@@ -142,6 +142,9 @@ impl Perform for Term {
     }
 
     fn osc_dispatch(&mut self, params: &[&[u8]], bell_terminated: bool) {
+        if std::mem::take(&mut self.osc_rejected) {
+            return;
+        }
         // vte splits the payload at every ';', but titles and URIs may
         // contain ';' themselves, so the rest is joined back.
         match params {
