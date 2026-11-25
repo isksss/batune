@@ -70,6 +70,20 @@ impl Term {
         self.respond(&format!("\x1b[{mark}{mode};{value}$y"));
     }
 
+    /// XTWINOPS 14 (text area in pixels), 16 (cell in pixels) and 18 (text
+    /// area in cells), each answered as height then width like xterm.
+    pub(super) fn report_size(&mut self, op: usize) {
+        let (cw, ch) = (self.cell_pixels.0 as usize, self.cell_pixels.1 as usize);
+        let (cols, rows) = (self.cols(), self.rows());
+        let (height, width) = match op {
+            14 => (rows * ch, cols * cw),
+            16 => (ch, cw),
+            18 => (rows, cols),
+            _ => return,
+        };
+        self.respond(&format!("\x1b[{};{height};{width}t", op - 10));
+    }
+
     /// XTSMGRAPHICS. The limits are fixed, so setting or resetting one
     /// reports the value in effect, as xterm does when asked for more than
     /// its maximum.

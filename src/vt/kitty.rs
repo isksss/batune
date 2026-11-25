@@ -128,6 +128,8 @@ pub(crate) struct Keys {
     pub(crate) placement: Option<u32>,
     /// Source rectangle in pixels (`x`, `y`, `w`, `h`; 0 = to the edge).
     pub(crate) source: [u32; 4],
+    /// Offset inside the first cell in pixels (`X`, `Y`).
+    pub(crate) offset: [u32; 2],
     /// Size in cells (`c`, `r`; 0 = from the pixel size).
     pub(crate) cols: u32,
     pub(crate) rows: u32,
@@ -152,6 +154,7 @@ impl Default for Keys {
             number: None,
             placement: None,
             source: [0; 4],
+            offset: [0; 2],
             cols: 0,
             rows: 0,
             cursor_stay: false,
@@ -194,6 +197,8 @@ pub(crate) fn parse(body: &[u8]) -> Option<(Keys, &[u8])> {
             b'y' => keys.source[1] = int()?,
             b'w' => keys.source[2] = int()?,
             b'h' => keys.source[3] = int()?,
+            b'X' => keys.offset[0] = int()?,
+            b'Y' => keys.offset[1] = int()?,
             b'c' => keys.cols = int()?,
             b'r' => keys.rows = int()?,
             b'C' => keys.cursor_stay = int()? == 1,

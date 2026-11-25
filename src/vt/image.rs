@@ -4,6 +4,8 @@
 //! [`ImageCell`] naming the placement and the cell's offset inside it. The
 //! image therefore scrolls, moves into the scrollback and disappears with
 //! the cells, and printing or erasing over a cell removes that piece.
+//! kitty placements are the exception: kitty draws them on a layer of their
+//! own, so printing and erasing keep them (see `ImageCell::layered`).
 
 use std::collections::VecDeque;
 use std::fmt;
@@ -107,6 +109,9 @@ pub struct Placement {
     /// otherwise (kitty's convention).
     pub z: i32,
     pub cursor: ImageCursor,
+    /// Where the image starts inside its top-left cell, as fractions of the
+    /// cell's width and height (kitty `X`, `Y`); `[0.0, 0.0]` is the corner.
+    pub offset: [f32; 2],
 }
 
 impl Placement {
@@ -119,12 +124,14 @@ impl Placement {
             source: [0.0, 0.0, 1.0, 1.0],
             z: -1,
             cursor: ImageCursor::default(),
+            offset: [0.0, 0.0],
         }
     }
 
     pub(crate) fn cells(&self) -> (usize, usize) {
-        let cells = |v: f32| (v.ceil() as usize).max(1);
-        (cells(self.width), cells(self.height))
+        let cells = |v: f32, o: f32| ((o + v).ceil() as usize).max(1);
+        let [x, y] = self.offset;
+        (cells(self.width, x), cells(self.height, y))
     }
 }
 
@@ -133,6 +140,7 @@ struct Placed {
     id: u64,
     image: Arc<Image>,
     placement: Placement,
+    layered: bool,
 }
 
 /// The piece of a placed image that one cell shows.
@@ -165,6 +173,12 @@ impl ImageCell {
         self.placed.id
     }
 
+    /// Whether printing and erasing leave this piece in place (kitty
+    /// graphics). Other images belong to the text they replaced.
+    pub(crate) fn layered(&self) -> bool {
+        self.placed.layered
+    }
+
     /// The cell's column and row inside the placement.
     pub fn offset(&self) -> (usize, usize) {
         (self.col as usize, self.row as usize)
@@ -176,25 +190,36 @@ impl ImageCell {
         Arc::ptr_eq(&self.placed, &other.placed)
     }
 
-    /// The covered part of the cell from its top-left corner, as fractions
-    /// of the cell's width and height (1.0 except at the image's right and
-    /// bottom edges).
+    /// Where the covered part of the cell starts, as fractions of the
+    /// cell's width and height (0.0 except in the first column / row of an
+    /// image placed with an offset).
+    pub fn start(&self) -> (f32, f32) {
+        let [x, y] = self.placed.placement.offset;
+        let start = |o: f32, i: u32| (o - i as f32).clamp(0.0, 1.0);
+        (start(x, self.col), start(y, self.row))
+    }
+
+    /// Where the covered part of the cell ends, from its top-left corner, as
+    /// fractions of the cell's width and height (1.0 except at the image's
+    /// right and bottom edges).
     pub fn extent(&self) -> (f32, f32) {
         let p = &self.placed.placement;
-        let cover = |size: f32, i: u32| (size - i as f32).clamp(0.0, 1.0);
-        (cover(p.width, self.col), cover(p.height, self.row))
+        let [x, y] = p.offset;
+        let cover = |size: f32, o: f32, i: u32| (o + size - i as f32).clamp(0.0, 1.0);
+        (cover(p.width, x, self.col), cover(p.height, y, self.row))
     }
 
     /// Texture coordinates `[left, top, right, bottom]` of the covered part,
     /// in fractions of the image size.
     pub fn uv(&self) -> [f32; 4] {
         let p = &self.placed.placement;
-        let (w, h) = self.extent();
+        let ((x0, y0), (x1, y1)) = (self.start(), self.extent());
         let [l, t, r, b] = p.source;
-        let u = |i: f32| l + (r - l) * i / p.width;
-        let v = |i: f32| t + (b - t) * i / p.height;
+        let [ox, oy] = p.offset;
+        let u = |i: f32| l + (r - l) * (i - ox) / p.width;
+        let v = |i: f32| t + (b - t) * (i - oy) / p.height;
         let (x, y) = (self.col as f32, self.row as f32);
-        [u(x), v(y), u(x + w), v(y + h)]
+        [u(x + x0), v(y + y0), u(x + x1), v(y + y1)]
     }
 }
 
@@ -202,13 +227,14 @@ impl ImageCell {
 pub(crate) struct PlacedCells(Arc<Placed>);
 
 impl PlacedCells {
-    pub(crate) fn new(image: Arc<Image>, placement: Placement) -> Self {
+    pub(crate) fn new(image: Arc<Image>, placement: Placement, layered: bool) -> Self {
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
         Self(Arc::new(Placed {
             id,
             image,
             placement,
+            layered,
         }))
     }
 

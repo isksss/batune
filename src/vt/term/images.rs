@@ -8,15 +8,21 @@ use crate::vt::iterm;
 use crate::vt::sixel;
 
 impl Term {
-    /// [`Term::place_image`], returning the placement's id.
-    pub(super) fn put_image(&mut self, image: Arc<Image>, placement: Placement) -> u64 {
+    /// [`Term::place_image`], returning the placement's id. A `layered`
+    /// image (kitty) leaves the text under it and outlives writes to it.
+    pub(super) fn put_image(
+        &mut self,
+        image: Arc<Image>,
+        placement: Placement,
+        layered: bool,
+    ) -> u64 {
         let (cols, rows) = placement.cells();
         let left = self.cursor.col;
         let span = cols.min(self.cols() - left);
         let top = self.cursor.row;
         let stay = placement.cursor == ImageCursor::Stay;
         let evict = self.images.add(&image);
-        let placed = PlacedCells::new(image, placement);
+        let placed = PlacedCells::new(image, placement, layered);
         let id = placed.id();
         for dy in 0..rows {
             let row = if stay {
@@ -30,8 +36,10 @@ impl Term {
             if row >= self.rows() {
                 break;
             }
-            let bg = self.cursor.pen.bg;
-            self.grid.row_mut(row).erase(left..left + span, bg);
+            if !layered {
+                let bg = self.cursor.pen.bg;
+                self.grid.row_mut(row).erase(left..left + span, bg);
+            }
             for dx in 0..span {
                 self.grid
                     .cell_mut(row, left + dx)

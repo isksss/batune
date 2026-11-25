@@ -4,7 +4,7 @@ use unicode_width::UnicodeWidthChar;
 use vte::{Params, Perform};
 
 use super::{Charset, Event, MAX_TITLE_BYTES, Term, arg};
-use crate::vt::cell::{Cell, Flags};
+use crate::vt::cell::Flags;
 use crate::vt::sgr;
 use crate::vt::sixel;
 
@@ -40,7 +40,8 @@ impl Perform for Term {
                 // left blank and the character starts the next row.
                 let (row, col) = (self.cursor.row, self.cursor.col);
                 self.clear_wide_halves(row, col, 1);
-                *self.grid.cell_mut(row, col) = Cell::blank(self.cursor.pen.bg);
+                let bg = self.cursor.pen.bg;
+                self.grid.cell_mut(row, col).erase(bg);
                 self.wrap();
             } else {
                 self.cursor.col = cols - width;
@@ -266,6 +267,8 @@ impl Perform for Term {
                 _ => {}
             },
             ([b'?'], 'n') if arg(params, 0, 0) == 6 => self.report_cursor(true),
+            // XTWINOPS: only the size reports; the window is the host's.
+            ([], 't') => self.report_size(arg(params, 0, 0)),
             ([b'?'], 'S') => {
                 let mut values = params.iter().map(|p| p[0]);
                 let item = values.next().unwrap_or(0);

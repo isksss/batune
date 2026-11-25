@@ -236,8 +236,8 @@ impl ImageLayer {
             let n = self.instances.len() as u32;
             self.instances.push(ImageInstance {
                 pos: [
-                    origin + f32::from(q.col) * cell.0,
-                    origin + f32::from(q.row) * cell.1,
+                    origin + (f32::from(q.col) + q.offset[0]) * cell.0,
+                    origin + (f32::from(q.row) + q.offset[1]) * cell.1,
                 ],
                 size: [q.width * cell.0, q.height * cell.1],
                 uv: q.uv,
