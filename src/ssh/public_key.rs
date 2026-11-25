@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use russh::client::Handle;
+use russh::client::{AuthResult, Handle};
 use russh::keys::agent::client::{AgentClient, AgentStream};
 use russh::keys::{self, HashAlg, PrivateKey, PrivateKeyWithHashAlg, PublicKey};
 
@@ -17,20 +17,22 @@ const KEY_FILES: [&str; 3] = ["id_ed25519", "id_ecdsa", "id_rsa"];
 
 const PASSPHRASE_TRIES: usize = 3;
 
-/// Returns whether the server accepted one of the keys.
+/// The server's answer to the first key it accepted, fully or partially,
+/// or else to the last key offered; `None` when no key was offered.
 pub async fn authenticate(
     handle: &mut Handle<Handler>,
     user: &str,
     keys: &mut Keys,
     out: &Output,
-) -> Result<bool, BoxError> {
+) -> Result<Option<AuthResult>, BoxError> {
     let rsa_hash = handle.best_supported_rsa_hash().await?.flatten();
     let mut tried = Vec::new();
-    if with_agent(handle, user, rsa_hash, &mut tried).await? {
-        return Ok(true);
+    let mut last = None;
+    if let Some(result) = with_agent(handle, user, rsa_hash, &mut tried, &mut last).await? {
+        return Ok(Some(result));
     }
     let Some(dir) = std::env::home_dir().map(|home| home.join(".ssh")) else {
-        return Ok(false);
+        return Ok(last);
     };
     for path in KEY_FILES.map(|name| dir.join(name)) {
         // Asking for the passphrase of a key the agent already offered would
@@ -46,11 +48,26 @@ pub async fn authenticate(
         }
         tried.push(key.public_key().clone());
         let key = PrivateKeyWithHashAlg::new(Arc::new(key), rsa_hash);
-        if handle.authenticate_publickey(user, key).await?.success() {
-            return Ok(true);
+        let result = handle.authenticate_publickey(user, key).await?;
+        if accepted(&result) {
+            return Ok(Some(result));
         }
+        last = Some(result);
     }
-    Ok(false)
+    Ok(last)
+}
+
+/// A partial success means the key was good but the server wants another
+/// method too; trying more keys would not help.
+fn accepted(result: &AuthResult) -> bool {
+    matches!(
+        result,
+        AuthResult::Success
+            | AuthResult::Failure {
+                partial_success: true,
+                ..
+            }
+    )
 }
 
 type Agent = AgentClient<Box<dyn AgentStream + Send + Unpin>>;
@@ -62,12 +79,13 @@ async fn with_agent(
     user: &str,
     rsa_hash: Option<HashAlg>,
     tried: &mut Vec<PublicKey>,
-) -> Result<bool, BoxError> {
+    last: &mut Option<AuthResult>,
+) -> Result<Option<AuthResult>, BoxError> {
     let Some(mut agent) = connect_agent().await else {
-        return Ok(false);
+        return Ok(None);
     };
     let Ok(identities) = agent.request_identities().await else {
-        return Ok(false);
+        return Ok(None);
     };
     for identity in identities {
         let key = identity.public_key().into_owned();
@@ -79,14 +97,14 @@ async fn with_agent(
             .authenticate_publickey_with(user, key, rsa_hash, &mut agent)
             .await
         {
-            Ok(result) if result.success() => return Ok(true),
-            Ok(_) => {}
+            Ok(result) if accepted(&result) => return Ok(Some(result)),
+            Ok(result) => *last = Some(result),
             // The agent refused to sign (e.g. the user declined a
             // confirmation); the next key may still work.
             Err(_) => {}
         }
     }
-    Ok(false)
+    Ok(None)
 }
 
 #[cfg(unix)]

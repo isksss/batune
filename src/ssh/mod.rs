@@ -14,12 +14,15 @@ mod target;
 
 use std::error::Error;
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use russh::client::{self, Handle};
 use russh::keys::{PublicKey, PublicKeyOrCertificate};
 use russh::{ChannelMsg, Disconnect};
+use tokio::sync::Notify;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 
 use crate::pty::{Event, ExitStatus, Session, Size};
@@ -194,9 +197,19 @@ async fn session(
         keys: keys.clone(),
         out: out.clone(),
         accepted: None,
+        changed_key: Arc::new(AtomicBool::new(false)),
+        prompting: Arc::new(Notify::new()),
     };
+    let changed_key = handler.changed_key.clone();
+    let prompting = handler.prompting.clone();
     out.print(&format!("Connecting to {target}...\n"));
-    let mut config = client::Config::default();
+    let mut config = client::Config {
+        // Without keepalives a connection that died while the machine slept
+        // hangs silently; russh closes it after `keepalive_max` (3) misses.
+        keepalive_interval: Some(Duration::from_secs(30)),
+        nodelay: true,
+        ..Default::default()
+    };
     // An unreadable file is reported by the key check itself.
     let recorded: Vec<PublicKey> = host_key::known_hosts_path()
         .and_then(|path| host_key::recorded(&path, &target.host, target.port).ok())
@@ -206,16 +219,51 @@ async fn session(
         .collect();
     config.preferred.key = host_key::prefer_recorded(&config.preferred.key, &recorded).into();
     let config = Arc::new(config);
-    let mut handle = client::connect(config, (target.host.as_str(), target.port), handler).await?;
+    // An unresponsive host keeps the TCP connect or the key exchange waiting
+    // for minutes, so the keyboard is watched meanwhile.
+    let mut handle = tokio::select! {
+        handle = client::connect(config, (target.host.as_str(), target.port), handler) => handle?,
+        () = interrupted(&keys, &prompting) => return Err("interrupted".into()),
+    };
     // The handler only prompts during key exchange, which is over; from here
     // on this task owns the keyboard.
     let mut keys = keys.lock().await;
-    if !auth::authenticate(&mut handle, target, &mut keys, out).await? {
+    if !auth::authenticate(
+        &mut handle,
+        target,
+        &mut keys,
+        out,
+        changed_key.load(Ordering::Relaxed),
+    )
+    .await?
+    {
         return Err("authentication failed".into());
     }
     let status = shell(&handle, &mut keys, out).await;
     let _ = handle.disconnect(Disconnect::ByApplication, "", "en").await;
     status
+}
+
+/// Resolves when the user presses Ctrl-C or the tab is closed. Other input
+/// is dropped: nothing is waiting for it yet. Whenever `prompting` is
+/// notified the keyboard is let go, so that the host key prompt can take it
+/// (tokio's mutex is fair, so the prompt gets it before this loop does
+/// again).
+async fn interrupted(keys: &tokio::sync::Mutex<Keys>, prompting: &Notify) {
+    loop {
+        let mut keys = keys.lock().await;
+        loop {
+            tokio::select! {
+                input = keys.rx.recv() => match input {
+                    Some(Input::Data(bytes)) if bytes.contains(&0x03) => return,
+                    Some(Input::Data(_)) => {}
+                    Some(Input::Resize(size)) => keys.size = size,
+                    Some(Input::Close) | None => return,
+                },
+                () = prompting.notified() => break,
+            }
+        }
+    }
 }
 
 async fn shell(
@@ -242,6 +290,10 @@ async fn shell(
         code: None,
         signal: None,
     };
+    // A write waits for the server's window; reading on meanwhile keeps a
+    // server that echoes a large paste from waiting on us in turn. Input is
+    // not read while a write is pending, so it stays in order.
+    let mut sending = None;
     loop {
         tokio::select! {
             msg = read.wait() => match msg {
@@ -256,8 +308,12 @@ async fn shell(
                 Some(ChannelMsg::Close) | None => break,
                 Some(_) => {}
             },
-            input = keys.rx.recv() => match input {
-                Some(Input::Data(bytes)) => write.data_bytes(bytes).await?,
+            result = async { sending.as_mut().unwrap().await }, if sending.is_some() => {
+                result?;
+                sending = None;
+            }
+            input = keys.rx.recv(), if sending.is_none() => match input {
+                Some(Input::Data(bytes)) => sending = Some(Box::pin(write.data_bytes(bytes))),
                 Some(Input::Resize(size)) => {
                     keys.size = size;
                     write
@@ -285,6 +341,10 @@ struct Handler {
     /// the same key: prompting then would wait on the keyboard, which the
     /// shell loop holds.
     accepted: Option<PublicKey>,
+    /// Set when the user accepted a key that differs from the recorded one.
+    changed_key: Arc<AtomicBool>,
+    /// Asks [`interrupted`] to hand over the keyboard.
+    prompting: Arc<Notify>,
 }
 
 impl Handler {
@@ -305,6 +365,13 @@ impl Handler {
                 self.accepted = Some(key);
                 return Ok(true);
             }
+            host_key::Status::Revoked => {
+                self.out.print(&format!(
+                    "The {algorithm} host key for '{host}' ({fingerprint}) is marked as revoked in {}.\n",
+                    path.display()
+                ));
+                return Err("host key verification failed".into());
+            }
             host_key::Status::Unknown => format!(
                 "The authenticity of host '{host}' can't be established.\n\
                  {algorithm} key fingerprint is {fingerprint}.\n"
@@ -320,6 +387,7 @@ impl Handler {
             ),
         };
         self.out.print(&warning);
+        self.prompting.notify_one();
         let answer = self
             .keys
             .lock()
@@ -345,6 +413,9 @@ impl Handler {
                 )),
             }
         }
+        if matches!(status, host_key::Status::Changed { .. }) {
+            self.changed_key.store(true, Ordering::Relaxed);
+        }
         self.accepted = Some(key);
         Ok(true)
     }
@@ -366,5 +437,55 @@ impl client::Handler for Handler {
     async fn auth_banner(&mut self, banner: &str, _: &mut client::Session) -> Result<(), BoxError> {
         self.out.print(banner);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(f)
+    }
+
+    #[test]
+    fn ctrl_c_interrupts_the_connection_and_a_prompt_can_still_read_keys() {
+        block_on(async {
+            let (tx, rx) = unbounded_channel();
+            let size = Size {
+                rows: 24,
+                cols: 80,
+                pixel_width: 0,
+                pixel_height: 0,
+            };
+            let keys = tokio::sync::Mutex::new(Keys { rx, size });
+            let prompting = Notify::new();
+            let watch = interrupted(&keys, &prompting);
+            tokio::pin!(watch);
+            tx.send(Input::Data(b"x".to_vec())).unwrap();
+            let prompt = async {
+                prompting.notify_one();
+                let mut keys = keys.lock().await;
+                tx.send(Input::Data(b"y".to_vec())).unwrap();
+                match keys.rx.recv().await {
+                    Some(Input::Data(bytes)) => bytes,
+                    _ => Vec::new(),
+                }
+            };
+            // `biased`: the watch takes the keyboard (and "x") first.
+            tokio::select! {
+                biased;
+                () = &mut watch => panic!("ended without Ctrl-C"),
+                got = prompt => assert_eq!(got, b"y"),
+            }
+            tx.send(Input::Data(b"a\x03".to_vec())).unwrap();
+            tokio::time::timeout(Duration::from_secs(5), watch)
+                .await
+                .expect("Ctrl-C did not interrupt");
+        });
     }
 }
