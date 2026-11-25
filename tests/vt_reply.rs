@@ -99,7 +99,7 @@ fn osc_52_with_invalid_base64_is_ignored() {
 }
 
 #[test]
-fn osc_52_query_asks_the_host_and_the_host_answers_in_base64() {
+fn osc_52_query_is_reported_but_never_answered() {
     let mut t = term("\x1b]52;c;?\x07");
     assert_eq!(
         t.drain_events().collect::<Vec<_>>(),
@@ -107,8 +107,7 @@ fn osc_52_query_asks_the_host_and_the_host_answers_in_base64() {
             selection: "c".into()
         }]
     );
-    t.reply_clipboard("c", "foo");
-    assert_eq!(t.take_responses(), b"\x1b]52;c;Zm9v\x1b\\");
+    assert_eq!(t.take_responses(), b"");
 }
 
 #[test]
