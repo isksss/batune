@@ -8,6 +8,7 @@ use crate::vt::{
 
 use crate::palette::Palette;
 use crate::search::Search;
+use crate::selection::clamp_u16;
 use crate::selection::{self, Point, Range};
 
 /// Search highlights take the theme's yellow and red rather than colours
@@ -193,10 +194,6 @@ fn cell_view(cell: &Cell, palette: &Palette) -> CellView {
         underline_color: (cell.underline_color != VtColor::Default)
             .then(|| palette.foreground(cell.underline_color, false)),
     }
-}
-
-fn clamp_u16(v: usize) -> u16 {
-    u16::try_from(v).unwrap_or(u16::MAX)
 }
 
 #[cfg(test)]

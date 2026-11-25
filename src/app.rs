@@ -26,7 +26,7 @@ use crate::output;
 use crate::palette::Palette;
 use crate::pty::Session;
 use crate::search::{self, Search};
-use crate::selection::{Clicks, Selection};
+use crate::selection::{Clicks, Selection, clamp_u16};
 use crate::settings::Settings;
 use crate::ssh::Target;
 use crate::tab_bar::{self, Clicked};
@@ -617,8 +617,4 @@ impl Active {
         }
         clicked
     }
-}
-
-fn clamp_u16(v: usize) -> u16 {
-    u16::try_from(v).unwrap_or(u16::MAX)
 }
