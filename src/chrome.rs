@@ -10,7 +10,7 @@ use crate::render::Color;
 /// Light or dark frame for a terminal drawn on `background`: dark when white
 /// text on it would contrast more than black text (relative luminance below
 /// the point where both contrast ratios are equal).
-pub fn theme_for(background: Color) -> Theme {
+fn theme_for(background: Color) -> Theme {
     let linear = |c: u8| {
         let c = f32::from(c) / 255.0;
         if c <= 0.04045 {
@@ -166,7 +166,12 @@ mod tests {
 
     #[test]
     fn dark_backgrounds_get_a_dark_frame() {
-        for name in ["batune-dark", "solarized-dark", "gruvbox-dark", "tokyo-night"] {
+        for name in [
+            "batune-dark",
+            "solarized-dark",
+            "gruvbox-dark",
+            "tokyo-night",
+        ] {
             let background = theme::find(name).unwrap().background;
             assert_eq!(theme_for(background), Theme::Dark, "{name}");
         }

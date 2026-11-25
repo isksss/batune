@@ -11,7 +11,7 @@ use crate::gpu::Gpu;
 use crate::input::KeyModes;
 use crate::output;
 use crate::palette::Palette;
-use crate::pty::{LocalSession, Session, Size};
+use crate::pty::{LocalSession, Session};
 use crate::selection;
 use crate::ssh::SshSession;
 use crate::vt::{KeyboardFlags, Term};
@@ -52,13 +52,7 @@ impl Tab {
             crate::pty::Event::Output(bytes) => sender.push(&bytes),
             crate::pty::Event::Closed => sender.close(),
         };
-        let (pixel_width, pixel_height) = gpu.grid_pixels(cols, rows);
-        let size = Size {
-            rows,
-            cols,
-            pixel_width,
-            pixel_height,
-        };
+        let size = gpu.pty_size(cols, rows);
         let (name, session): (String, Box<dyn Session>) = match launch {
             Launch::Local(profile) => {
                 let command = config.command(profile.as_ref());
@@ -149,13 +143,7 @@ impl Tab {
         if let Some(search) = self.search.as_mut() {
             search.refresh(&self.term);
         }
-        let (pixel_width, pixel_height) = gpu.grid_pixels(cols, rows);
-        let size = Size {
-            rows,
-            cols,
-            pixel_width,
-            pixel_height,
-        };
+        let size = gpu.pty_size(cols, rows);
         if let Err(e) = self.session.resize(size) {
             eprintln!("batune: resize session: {e}");
         }

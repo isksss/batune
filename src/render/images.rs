@@ -10,7 +10,7 @@ use bytemuck::{Pod, Zeroable};
 
 use crate::render::background::{self, BackgroundFit, BackgroundImage};
 use crate::render::frame::{Frame, ImageData};
-use crate::render::renderer::InstanceBuffer;
+use crate::render::renderer::{InstanceBuffer, instanced_pipelines};
 
 /// Textures not used by the current frame are kept up to this many bytes,
 /// so scrolling back to an image does not upload it again.
@@ -109,40 +109,7 @@ impl ImageLayer {
             bind_group_layouts: &[Some(globals), Some(&layout)],
             immediate_size: 0,
         });
-        let pipeline = |label, vs, fs, attributes: &[wgpu::VertexAttribute], stride| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: Some(label),
-                layout: Some(&pipeline_layout),
-                vertex: wgpu::VertexState {
-                    module: shader,
-                    entry_point: Some(vs),
-                    compilation_options: Default::default(),
-                    buffers: &[Some(wgpu::VertexBufferLayout {
-                        array_stride: stride as u64,
-                        step_mode: wgpu::VertexStepMode::Instance,
-                        attributes,
-                    })],
-                },
-                primitive: wgpu::PrimitiveState {
-                    topology: wgpu::PrimitiveTopology::TriangleStrip,
-                    ..Default::default()
-                },
-                depth_stencil: None,
-                multisample: Default::default(),
-                fragment: Some(wgpu::FragmentState {
-                    module: shader,
-                    entry_point: Some(fs),
-                    compilation_options: Default::default(),
-                    targets: &[Some(wgpu::ColorTargetState {
-                        format,
-                        blend: Some(wgpu::BlendState::PREMULTIPLIED_ALPHA_BLENDING),
-                        write_mask: wgpu::ColorWrites::ALL,
-                    })],
-                }),
-                multiview_mask: None,
-                cache: None,
-            })
-        };
+        let pipeline = instanced_pipelines(device, &pipeline_layout, shader, format);
         let background_pipeline = pipeline(
             "batune-render background image",
             "vs_background",

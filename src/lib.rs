@@ -6,14 +6,12 @@ pub mod render;
 pub mod vt;
 
 mod app;
-mod background;
 mod bindings;
 mod blink;
 mod chrome;
 mod clipboard;
 mod config;
 mod config_edit;
-mod frame;
 mod gpu;
 mod icon;
 mod ime;

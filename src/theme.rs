@@ -29,7 +29,7 @@ const fn ansi(v: [u32; 16]) -> [Color; 16] {
 
 pub const DEFAULT: &str = "batune-dark";
 
-pub const THEMES: &[Theme] = &[
+const THEMES: &[Theme] = &[
     Theme {
         name: "batune-dark",
         foreground: hex(0xd8d8d8),
