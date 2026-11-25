@@ -306,6 +306,12 @@ fn placement(keys: &Keys, image: &Image, cell: (u32, u32)) -> Result<Placement, 
         (c, r) => (c as f32, r as f32),
     };
     let (width, height) = (width.min(MAX_IMAGE_CELLS), height.min(MAX_IMAGE_CELLS));
+    // kitty requires the offset to stay inside the cell.
+    let [ox, oy] = keys.offset;
+    let offset = [
+        ox.min(cell.0 - 1) as f32 / cw,
+        oy.min(cell.1 - 1) as f32 / ch,
+    ];
     let (wf, hf) = (w as f32, h as f32);
     Ok(Placement {
         width,
@@ -322,5 +328,6 @@ fn placement(keys: &Keys, image: &Image, cell: (u32, u32)) -> Result<Placement, 
         } else {
             ImageCursor::AfterImage
         },
+        offset,
     })
 }

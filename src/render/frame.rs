@@ -159,6 +159,8 @@ pub struct ImageQuad {
     /// Top-left cell.
     pub col: u16,
     pub row: u16,
+    /// Where the quad starts inside the top-left cell, in cells.
+    pub offset: [f32; 2],
     /// Size in cells; fractions end the quad inside a cell.
     pub width: f32,
     pub height: f32,

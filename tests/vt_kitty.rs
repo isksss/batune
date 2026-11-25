@@ -371,3 +371,17 @@ fn printing_over_other_images_still_removes_them() {
     t.advance(b"\x1b[Hx\x1b[K");
     assert_eq!(picture(&t), ["x", "", "", ""]);
 }
+
+#[test]
+fn x_and_y_offset_the_image_inside_its_first_cell() {
+    let mut t = term(8, 4);
+    // 30x30 px is 3 x 1.5 cells; half a cell in, it covers 4 x 2 cells.
+    t.advance(apc(&format!("a=T,s=30,v=30,X=5,Y=10,C=1;{}", pixels(30, 30))).as_bytes());
+    assert_eq!(picture(&t), ["####", "####", "", ""]);
+    let first = t.cell(0, 0).image().unwrap();
+    assert_eq!((first.start(), first.extent()), ((0.5, 0.5), (1.0, 1.0)));
+    assert_eq!(first.uv(), [0.0, 0.0, 0.5 / 3.0, 0.5 / 1.5]);
+    let last = t.cell(1, 3).image().unwrap();
+    assert_eq!((last.start(), last.extent()), ((0.0, 0.0), (0.5, 1.0)));
+    assert_eq!(last.uv(), [2.5 / 3.0, 0.5 / 1.5, 1.0, 1.0]);
+}
