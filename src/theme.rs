@@ -80,6 +80,16 @@ pub const THEMES: &[Theme] = &[
             0x928374, 0xfb4934, 0xb8bb26, 0xfabd2f, 0x83a598, 0xd3869b, 0x8ec07c, 0xebdbb2,
         ]),
     },
+    Theme {
+        name: "tokyo-night",
+        foreground: hex(0xc0caf5),
+        background: hex(0x1a1b26),
+        cursor: hex(0xc0caf5),
+        ansi: ansi([
+            0x15161e, 0xf7768e, 0x9ece6a, 0xe0af68, 0x7aa2f7, 0xbb9af7, 0x7dcfff, 0xa9b1d6,
+            0x414868, 0xff899d, 0x9fe044, 0xfaba4a, 0x8db0ff, 0xc7a9ff, 0xa4daff, 0xc0caf5,
+        ]),
+    },
 ];
 
 pub fn find(name: &str) -> Option<&'static Theme> {

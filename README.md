@@ -94,7 +94,7 @@ line_height = 1.0             # セルの高さをフォントの何倍にする
 cell_width = 1.0              # セルの幅をフォントの何倍にするか(0.5〜3.0)
 
 [colors]
-theme = "solarized-dark"      # batune-dark / batune-light / solarized-dark / solarized-light / gruvbox-dark
+theme = "solarized-dark"      # batune-dark / batune-light / solarized-dark / solarized-light / gruvbox-dark / tokyo-night
 background = "#001e26"        # テーマの色を個別に上書きできる(foreground・cursor・ansi・brights も同様)
 bold_is_bright = true         # 太字を ANSI の 0-7 番の色で指定されたら明るい 8-15 番で描く
 
