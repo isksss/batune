@@ -36,8 +36,8 @@ pub enum Event {
     /// `"p"` (primary); an empty target means `"s0"` in xterm.
     ClipboardStore { selection: String, text: String },
     /// OSC 52 with `?`: the application asks for the clipboard contents.
-    /// Answer with [`Term::reply_clipboard`], or ignore the request (many
-    /// terminals do, since it lets any program read the clipboard).
+    /// The terminal never answers it: a reply would let any program, or a
+    /// remote host, read the clipboard.
     ClipboardLoad { selection: String },
 }
 
@@ -456,16 +456,6 @@ impl Term {
     /// not otherwise know the theme the renderer uses.
     pub fn set_reported_colors(&mut self, colors: ReportedColors) {
         self.reported_colors = colors;
-    }
-
-    /// Answers an [`Event::ClipboardLoad`] by queueing the OSC 52 reply in
-    /// [`Term::take_responses`].
-    pub fn reply_clipboard(&mut self, selection: &str, text: &str) {
-        let reply = format!(
-            "\x1b]52;{selection};{}\x1b\\",
-            crate::vt::base64::encode(text.as_bytes())
-        );
-        self.responses.extend_from_slice(reply.as_bytes());
     }
 
     /// Tells the terminal the size of a cell in pixels, which it cannot know

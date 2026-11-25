@@ -1,7 +1,7 @@
 #!/bin/sh
 # Packs batune.exe into an MSIX for the Microsoft Store, which signs
 # it on submission (Smart App Control blocks the unsigned exe from the zip).
-# Needs makemsix (docker/msix.Dockerfile).
+# Needs makemsix (from microsoft/msix-packaging) on PATH.
 # Usage: scripts/package-msix.sh <batune.exe> <out.msix>
 #
 # The Store identity comes from Partner Center (Product identity) through:

@@ -76,7 +76,12 @@ pub fn run() {
     let path = config::path();
     let config = path.as_deref().map(load_config).unwrap_or_default();
     let launch = match ssh {
-        Some(target) => Launch::Ssh(target),
+        Some(target) => {
+            // The local branch starts this through `startup_profile`; without
+            // it the first new-tab menu would wait on `wsl.exe`.
+            crate::wsl::distros();
+            Launch::Ssh(target)
+        }
         None => match config.startup_profile(profile) {
             Ok(profile) => Launch::Local(profile),
             Err(e) => {

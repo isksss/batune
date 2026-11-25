@@ -27,7 +27,7 @@ portable-pty = "0.9"
 russh = { version = "0.63", default-features = false, features = ["flate2", "rsa", "ring"] }
 serde = { version = "1", features = ["derive"] }
 swash = "0.2"
-tokio = { version = "1", features = ["rt", "macros", "sync", "net", "time"] }
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
 toml = "1"
 # The version already in the lock file (through toml); edits the file in
 # place for the settings screen.

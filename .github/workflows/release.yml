@@ -28,9 +28,16 @@ jobs:
           sudo apt-get install -y --no-install-recommends mingw-w64 zip
           rustup update stable
           rustup default stable
+          rustup component add clippy
           rustup target add x86_64-pc-windows-gnu
 
       - uses: Swatinem/rust-cache@v2
+
+      # Tests run on Linux only: the Windows target is cross-built and cannot run here.
+      - name: Test
+        run: |
+          cargo test --locked
+          cargo clippy --all-targets --locked -- -D warnings
 
       - name: Build
         run: |

@@ -1,8 +1,11 @@
-//! Standard base64 (RFC 4648 with padding) for OSC 52 and OSC 1337. Small enough that a
+//! Standard base64 (RFC 4648 with padding) decoding for OSC 52, OSC 1337 and kitty. Small enough that a
 //! dependency is not worth it.
 
+// Only tests encode (to build payloads); the terminal never sends base64.
+#[cfg(test)]
 const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+#[cfg(test)]
 pub(crate) fn encode(data: &[u8]) -> String {
     let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
     for chunk in data.chunks(3) {
