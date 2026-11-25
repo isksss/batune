@@ -2,7 +2,7 @@
 //!
 //! [`Session`] abstracts over anything that behaves like a terminal: a local
 //! shell on an OS pseudo terminal ([`LocalSession`], Linux PTY / Windows
-//! ConPTY) today, and a native SSH channel later. Output is delivered from a
+//! ConPTY) and a native SSH channel ([`crate::ssh::SshSession`]). Output is delivered from a
 //! background thread through an [`Event`] callback, so the UI can forward it
 //! to a channel or wake its event loop.
 
