@@ -17,6 +17,9 @@ dirs = "7"
 egui = "0.37"
 egui-wgpu = { version = "0.37", default-features = false }
 egui-winit = { version = "0.37", default-features = false }
+# Already in the lock file through russh; unpacks the release archives for
+# the self update.
+flate2 = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif"] }
 miniz_oxide = "0.8"
 notify = "8"
@@ -26,6 +29,9 @@ portable-pty = "0.9"
 # ring, not aws-lc-rs, to keep a single crypto backend (and no cmake/NASM on Windows).
 russh = { version = "0.63", default-features = false, features = ["flate2", "rsa", "ring"] }
 serde = { version = "1", features = ["derive"] }
+# Already in the lock file through russh; checks the downloaded release
+# against SHA256SUMS.
+sha2 = "0.11"
 swash = "0.2"
 tokio = { version = "1", features = ["rt", "macros", "sync"] }
 toml = "1"
@@ -35,6 +41,9 @@ toml_edit = "0.25"
 unicode-properties = { version = "0.1", default-features = false, features = ["emoji"] }
 unicode-segmentation = "1.13"
 unicode-width = "0.2"
+# For the self update. rustls with ring, as with russh; no gzip, since the
+# release archives are compressed already.
+ureq = { version = "3", default-features = false, features = ["rustls"] }
 vte = "0.15"
 wgpu = "30"
 winit = "0.30"
@@ -42,7 +51,11 @@ winit = "0.30"
 [target.'cfg(windows)'.dependencies]
 # Only for the documented dark-mode DWM attribute; winit covers the other DWM
 # attributes. 0.61 is the version already in the lock file.
-windows-sys = { version = "0.61", features = ["Win32_Graphics_Dwm"] }
+windows-sys = { version = "0.61", features = [
+    "Win32_Graphics_Dwm",
+    # GetCurrentPackageFullName, to leave a Store install to the Store.
+    "Win32_Storage_Packaging_Appx",
+] }
 
 [profile.release]
 opt-level = "s"

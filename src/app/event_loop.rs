@@ -60,6 +60,12 @@ impl ApplicationHandler<UserEvent> for App {
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: UserEvent) {
         let id = match event {
             UserEvent::ConfigChanged => return self.reload_config(),
+            UserEvent::Redraw => {
+                if let Some(active) = &self.active {
+                    active.window.request_redraw();
+                }
+                return;
+            }
             UserEvent::Output(id) => id,
         };
         let Some(active) = self.active.as_mut() else {
