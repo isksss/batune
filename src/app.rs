@@ -458,9 +458,7 @@ impl Active {
         if self.tabs.is_empty() {
             return;
         }
-        if index < self.current || self.current == self.tabs.len() {
-            self.current -= 1;
-        }
+        self.current = current_after_close(self.current, index, self.tabs.len());
         self.show_current(config);
     }
 
@@ -616,5 +614,59 @@ impl Active {
             gpu::Rendered::Presented | gpu::Rendered::Hidden => {}
         }
         clicked
+    }
+}
+
+/// The selected tab once the tab at `closed` is removed, leaving `len` (> 0)
+/// tabs: the same tab if it is still there, else the one that took its place,
+/// else the new last one.
+fn current_after_close(current: usize, closed: usize, len: usize) -> usize {
+    if closed < current || current == len {
+        current - 1
+    } else {
+        current
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::current_after_close;
+
+    #[test]
+    fn closing_a_tab_before_the_current_one_keeps_the_same_tab_selected() {
+        // [a b C d] -> [b C d]
+        assert_eq!(current_after_close(2, 0, 3), 1);
+    }
+
+    #[test]
+    fn closing_a_tab_after_the_current_one_keeps_the_index() {
+        // [a B c d] -> [a B c]
+        assert_eq!(current_after_close(1, 3, 3), 1);
+    }
+
+    #[test]
+    fn closing_the_current_tab_selects_the_next_one() {
+        // [a B c d] -> [a c d], c selected
+        assert_eq!(current_after_close(1, 1, 3), 1);
+    }
+
+    #[test]
+    fn closing_the_current_last_tab_selects_the_new_last_one() {
+        // [a b c D] -> [a b c]
+        assert_eq!(current_after_close(3, 3, 3), 2);
+    }
+
+    #[test]
+    fn closing_several_tabs_from_the_back_like_close_exited_stays_in_range() {
+        // [a b C d e], b, C and e exited; close_exited removes from the back.
+        let mut len = 5;
+        let mut current = 2;
+        for closed in [4, 2, 1] {
+            len -= 1;
+            current = current_after_close(current, closed, len);
+            assert!(current < len);
+        }
+        // [a d]: C's place went to d.
+        assert_eq!(current, 1);
     }
 }
