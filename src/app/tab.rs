@@ -118,12 +118,14 @@ impl Tab {
         }
     }
 
-    pub(super) fn selected_text(&self, config: &Config) -> Option<String> {
-        let range = self
-            .mouse
+    pub(super) fn selected_range(&self, config: &Config) -> Option<selection::Range> {
+        self.mouse
             .selection?
-            .range(&self.term, &config.selection.semantic_escape_chars)?;
-        Some(selection::text(&self.term, range))
+            .range(&self.term, &config.selection.semantic_escape_chars)
+    }
+
+    pub(super) fn selected_text(&self, config: &Config) -> Option<String> {
+        Some(selection::text(&self.term, self.selected_range(config)?))
     }
 
     /// `true` when there was a selection to clear.

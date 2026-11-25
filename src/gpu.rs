@@ -77,8 +77,13 @@ impl Gpu {
         .expect("no GPU adapter");
         let (device, queue) =
             pollster::block_on(adapter.request_device(&Default::default())).expect("GPU device");
+        let max = device.limits().max_texture_dimension_2d;
         let mut config = surface
-            .get_default_config(&adapter, size.width.max(1), size.height.max(1))
+            .get_default_config(
+                &adapter,
+                size.width.clamp(1, max),
+                size.height.clamp(1, max),
+            )
             .expect("surface unsupported by adapter");
         config.present_mode = wgpu::PresentMode::AutoVsync;
         surface.configure(&device, &config);
@@ -97,8 +102,10 @@ impl Gpu {
     }
 
     pub fn resize(&mut self, size: PhysicalSize<u32>) {
-        self.config.width = size.width.max(1);
-        self.config.height = size.height.max(1);
+        // A surface wider than the device's texture limit fails validation.
+        let max = self.device.limits().max_texture_dimension_2d;
+        self.config.width = size.width.clamp(1, max);
+        self.config.height = size.height.clamp(1, max);
         self.surface.configure(&self.device, &self.config);
     }
 

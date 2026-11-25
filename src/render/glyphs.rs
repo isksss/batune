@@ -668,6 +668,9 @@ pub(crate) struct AtlasFull;
 
 /// Maps glyphs to atlas rectangles and queues the pixels the GPU texture
 /// still needs.
+/// Entries kept besides those the atlas bounds; see [`GlyphCache::get`].
+const MAX_ENTRIES: usize = 1 << 16;
+
 pub(crate) struct GlyphCache {
     packer: ShelfPacker,
     entries: HashMap<GlyphKey, CellGlyphs>,
@@ -696,6 +699,12 @@ impl GlyphCache {
             return Ok(CellGlyphs::default());
         }
         let images = fonts.rasterize(key);
+        // Cells without an image take no atlas space, so a full atlas never
+        // clears them; past the cap they are rasterized again each time
+        // rather than letting distinct marks from the output pile up.
+        if images.is_empty() && self.entries.len() >= MAX_ENTRIES {
+            return Ok(CellGlyphs::default());
+        }
         // A full atlas takes none of the layers, so the renderer can grow
         // it and ask again without a half-cached cell or unused space.
         let sizes: Vec<_> = images.iter().map(|g| (g.width, g.height)).collect();

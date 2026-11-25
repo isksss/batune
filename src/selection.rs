@@ -2,7 +2,10 @@
 //!
 //! Positions use absolute lines: line 0 is the oldest scrollback row and
 //! the live screen follows it. A line keeps its number while output scrolls
-//! it into the scrollback, so a selection stays on the same text.
+//! it into the scrollback, so a selection stays on the same text — until the
+//! scrollback is full and drops its oldest rows, or is cleared (`ESC[3J`,
+//! `ESC c`). Then numbers shift or point past the end; [`Selection::range`]
+//! returns `None` for a selection that ends past the last line.
 
 use std::time::{Duration, Instant};
 
@@ -82,6 +85,9 @@ impl Selection {
         } else {
             (self.head, self.anchor)
         };
+        if end.line >= line_count(term) {
+            return None;
+        }
         let (start, end) = match self.unit {
             Unit::Cell => (start, end),
             Unit::Word => (
@@ -389,5 +395,21 @@ mod tests {
         t.scroll_display(1);
         assert_eq!(absolute_line(&t, 0), 0);
         assert_eq!(selected(&t, (0, 0), (1, 4), Unit::Cell), "1\n2");
+    }
+
+    #[test]
+    fn a_selection_past_the_cleared_scrollback_selects_nothing() {
+        let mut t = term(5, 2, "1\r\n2\r\n3\r\n4");
+        for unit in [Unit::Cell, Unit::Word, Unit::Line] {
+            let mut sel = Selection::new(Point::new(2, 0), unit);
+            sel.extend(Point::new(3, 0));
+            assert!(sel.range(&t, WORD_DELIMITERS).is_some());
+            let mut cleared = term(5, 2, "1\r\n2\r\n3\r\n4");
+            cleared.advance(b"\x1b[3J");
+            assert_eq!(sel.range(&cleared, WORD_DELIMITERS), None, "{unit:?}");
+        }
+        t.advance(b"\x1bc");
+        let sel = Selection::new(Point::new(3, 0), Unit::Line);
+        assert_eq!(sel.range(&t, WORD_DELIMITERS), None);
     }
 }

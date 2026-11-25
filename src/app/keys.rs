@@ -35,12 +35,14 @@ impl Active {
             self.on_search_key(event);
             return None;
         }
-        let selected = self.tab().selected_text(config);
+        // The text is built only for Copy; a large selection would
+        // otherwise be turned into a string on every key.
+        let selected = self.tab().selected_range(config).is_some();
         let bound = bindings::lookup(
             &config.keyboard.bindings,
             &event.logical_key,
             self.modifiers,
-            selected.is_some(),
+            selected,
         );
         match bound {
             Some(Bound::Action(action)) => {
@@ -96,13 +98,13 @@ impl Active {
     pub(super) fn run(
         &mut self,
         action: bindings::Action,
-        selected: Option<String>,
+        selected: bool,
         config: &Config,
     ) -> bool {
         use bindings::Action;
         match action {
             Action::Copy => {
-                if let Some(text) = selected {
+                if let Some(text) = self.tab().selected_text(config) {
                     self.clipboard.copy(&text);
                 }
             }
@@ -161,7 +163,7 @@ impl Active {
             }
             // With nothing selected the key keeps its usual meaning, so
             // Escape can be bound without taking it from the program.
-            Action::ClearSelection if selected.is_none() => return false,
+            Action::ClearSelection if !selected => return false,
             Action::ClearSelection => self.clear_selection(),
             // `resolve` never returns `None`; `tab_action` takes the rest.
             Action::None

@@ -118,7 +118,8 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::CursorLeft { .. } => active.over_bar = false,
             // Presses and the wheel over the bar are egui's alone. Releases
-            // always reach the terminal, to end a drag begun on the grid.
+            // always reach the terminal, to end a drag begun on the grid;
+            // on_mouse_button reports only releases of presses it reported.
             WindowEvent::MouseInput { state, button, .. } => {
                 if ui_redraw {
                     active.window.request_redraw();
@@ -133,6 +134,9 @@ impl ApplicationHandler<UserEvent> for App {
                 }
             }
             WindowEvent::Ime(event) if !typing => active.on_ime(event, &self.config),
+            // Minimizing on Windows reports 0x0; fitting the grid to it would
+            // truncate every tab to one cell, and there is no reflow back.
+            WindowEvent::Resized(size) if size.width == 0 || size.height == 0 => {}
             WindowEvent::Resized(size) => {
                 active.gpu.resize(size);
                 active.fit_grid();

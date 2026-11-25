@@ -315,3 +315,33 @@ fn full_atlas_reports_instead_of_overwriting() {
     assert_eq!(cache.get(&mut fonts, &key('W')), Err(AtlasFull));
     assert!(cache.take_uploads().is_empty());
 }
+
+#[test]
+fn cells_without_an_image_stop_being_cached_at_the_cap() {
+    let mut fonts = Fonts::new(None, 16.0);
+    let mut cache = GlyphCache::new(256, 256);
+    let blank = key('\u{2003}');
+    assert_eq!(
+        cache.get(&mut fonts, &blank).unwrap(),
+        CellGlyphs::default()
+    );
+    assert_eq!(cache.entries.len(), 1);
+    cache.entries.clear();
+    for i in 0..MAX_ENTRIES {
+        let mark = char::from_u32(0x10_0000 + i as u32).unwrap();
+        cache
+            .entries
+            .insert(with_marks('x', &[mark]), CellGlyphs::default());
+    }
+    assert_eq!(
+        cache.get(&mut fonts, &blank).unwrap(),
+        CellGlyphs::default()
+    );
+    assert_eq!(cache.entries.len(), MAX_ENTRIES);
+    assert!(cache.get(&mut fonts, &key('A')).unwrap().single().is_some());
+    assert_eq!(
+        cache.entries.len(),
+        MAX_ENTRIES + 1,
+        "drawn glyphs are still cached"
+    );
+}
