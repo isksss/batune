@@ -154,3 +154,12 @@ fn osc_52_store_is_limited_by_its_decoded_length() {
     assert_eq!(text.len(), MAX_CLIPBOARD_BYTES);
     assert_eq!(events(&format!("\x1b]52;c;{full}QUE=\x07")), []);
 }
+
+#[test]
+fn xtwinops_reports_the_text_area_and_cell_size() {
+    let mut t = Term::new(10, 5);
+    t.set_cell_pixel_size(8, 18);
+    t.advance(b"\x1b[14t\x1b[16t\x1b[18t\x1b[22;0t");
+    let answer = String::from_utf8(t.take_responses()).unwrap();
+    assert_eq!(answer, "\x1b[4;90;80t\x1b[6;18;8t\x1b[8;5;10t");
+}

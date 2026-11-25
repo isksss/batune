@@ -267,6 +267,8 @@ impl Perform for Term {
                 _ => {}
             },
             ([b'?'], 'n') if arg(params, 0, 0) == 6 => self.report_cursor(true),
+            // XTWINOPS: only the size reports; the window is the host's.
+            ([], 't') => self.report_size(arg(params, 0, 0)),
             ([b'?'], 'S') => {
                 let mut values = params.iter().map(|p| p[0]);
                 let item = values.next().unwrap_or(0);
