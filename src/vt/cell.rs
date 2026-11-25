@@ -158,6 +158,7 @@ impl Cell {
         self.flags = pen.flags;
         self.underline = pen.underline;
         self.underline_color = pen.underline_color;
+        let image = self.layered_image();
         self.extra = pen
             .extra
             .as_ref()
@@ -168,5 +169,17 @@ impl Cell {
                     ..CellExtra::default()
                 })
             });
+        self.set_image(image);
+    }
+
+    /// Makes this a [`Cell::blank`], keeping a kitty placement over it.
+    pub(crate) fn erase(&mut self, bg: Color) {
+        let image = self.layered_image();
+        *self = Self::blank(bg);
+        self.set_image(image);
+    }
+
+    pub(crate) fn layered_image(&self) -> Option<ImageCell> {
+        self.image().filter(|i| i.layered()).cloned()
     }
 }

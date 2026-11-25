@@ -125,9 +125,10 @@ fn push_images(out: &mut Vec<ImageQuad>, line: usize, row: &[Cell]) {
                 },
                 col: clamp_u16(start),
                 row: clamp_u16(line),
-                // Every cell but the last of a run is fully covered.
-                width: (end - start - 1) as f32 + last.extent().0,
-                height: first.extent().1,
+                offset: [first.start().0, first.start().1],
+                // Every cell but the first and last of a run is fully covered.
+                width: (end - start - 1) as f32 + last.extent().0 - first.start().0,
+                height: first.extent().1 - first.start().1,
                 uv: [first_uv[0], first_uv[1], last_uv[2], last_uv[3]],
                 z: first.z(),
             });
@@ -466,6 +467,25 @@ mod tests {
         assert_eq!(top.uv, [0.0, 0.0, 1.0, 0.5]);
         assert_eq!(bottom.uv, [0.0, 0.5, 1.0, 1.0]);
         assert_eq!(top.image, bottom.image);
+    }
+
+    #[test]
+    fn a_kitty_pixel_offset_moves_the_quads_inside_their_cells() {
+        let mut term = Term::new(10, 5);
+        term.set_cell_pixel_size(8, 16);
+        // 16x32 px = 2x2 cells, starting half a cell right and down.
+        term.advance(format!("\x1b_Ga=T,f=100,X=4,Y=8,C=1,q=2;{RED_PNG}\x1b\\").as_bytes());
+        let frame = build(&term, &Palette::default(), FOCUSED);
+        assert_eq!(frame.images.len(), 3, "{:?}", frame.images);
+        let (top, bottom) = (&frame.images[0], &frame.images[2]);
+        assert_eq!((top.col, top.row, top.offset), (0, 0, [0.5, 0.5]));
+        assert_eq!((top.width, top.height), (2.0, 0.5));
+        assert_eq!(top.uv, [0.0, 0.0, 1.0, 0.25]);
+        assert_eq!(
+            (bottom.row, bottom.offset, bottom.height),
+            (2, [0.5, 0.0], 0.5)
+        );
+        assert_eq!(bottom.uv, [0.0, 0.75, 1.0, 1.0]);
     }
 
     #[test]

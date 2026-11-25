@@ -354,6 +354,7 @@ fn images_cover_cell_backgrounds_and_stretch_over_their_cells() {
             },
             col: 2,
             row: 1,
+            offset: [0.0, 0.0],
             width: 4.0,
             height: 2.0,
             uv: [0.0, 0.0, 1.0, 1.0],
