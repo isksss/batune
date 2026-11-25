@@ -4,12 +4,15 @@
 use std::path::PathBuf;
 
 use egui::{Color32, ComboBox, DragValue, Grid, Key};
+use winit::event_loop::EventLoopProxy;
 
+use crate::app::UserEvent;
 use crate::config::{Backdrop, Config, Fit, Shape};
 use crate::{config_edit, theme};
 
 pub struct Settings {
     path: Option<PathBuf>,
+    proxy: EventLoopProxy<UserEvent>,
     /// The settings when the screen opened; only what differs is saved.
     before: Config,
     edited: Config,
@@ -21,9 +24,10 @@ pub struct Settings {
 }
 
 impl Settings {
-    pub fn new(config: &Config, path: Option<PathBuf>) -> Self {
+    pub fn new(config: &Config, path: Option<PathBuf>, proxy: EventLoopProxy<UserEvent>) -> Self {
         Self {
             path,
+            proxy,
             before: config.clone(),
             edited: config.clone(),
             family: config.font.family.clone().unwrap_or_default(),
@@ -84,6 +88,9 @@ impl Settings {
         // changed after this one.
         if result.is_ok() {
             self.before = self.edited.clone();
+            // Not left to the watch: there is none when the config directory
+            // did not exist at startup. A second reload finds nothing changed.
+            let _ = self.proxy.send_event(UserEvent::ConfigChanged);
         }
         self.status = Some(result);
     }

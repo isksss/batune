@@ -207,6 +207,11 @@ impl App {
         let Some(path) = self.config_path.as_deref() else {
             return;
         };
+        // Renaming the file away reaches here as a change to it, and load
+        // would read the missing file as the defaults.
+        if !path.exists() {
+            return;
+        }
         let new = match config::load(path) {
             Ok(new) => new,
             Err(e) => {
@@ -319,7 +324,11 @@ impl App {
             Clicked::Close(index) => active.close_tab(index, &self.config),
             Clicked::New(profile) => self.new_tab(Launch::Local(profile)),
             Clicked::Settings => {
-                active.settings = Some(Settings::new(&self.config, self.config_path.clone()));
+                active.settings = Some(Settings::new(
+                    &self.config,
+                    self.config_path.clone(),
+                    self.proxy.clone(),
+                ));
                 // Keys and the IME now go to egui; a composition begun in
                 // the terminal would otherwise stay drawn under the screen.
                 active.preedit = None;

@@ -1,12 +1,41 @@
 //! The WSL distributions installed on Windows, offered as profiles.
 
-use std::sync::OnceLock;
+use std::sync::{Once, OnceLock};
 
 /// The names `wsl.exe -l -q` lists, asked once per process. Empty off
 /// Windows, without WSL, or when `wsl.exe` fails.
+static DISTROS: OnceLock<Vec<String>> = OnceLock::new();
+static STARTED: Once = Once::new();
+
+/// The distributions if already listed, else empty while a background
+/// thread asks `wsl.exe`, which has no timeout and can take seconds to
+/// start WSL; the UI thread must not wait on it.
 pub fn distros() -> &'static [String] {
-    static DISTROS: OnceLock<Vec<String>> = OnceLock::new();
-    DISTROS.get_or_init(list)
+    in_background(&DISTROS, &STARTED, list)
+}
+
+/// The distributions, waiting for the background `wsl.exe` if they are not
+/// listed yet. For a profile name the config does not have, which may be one
+/// of them.
+pub fn distros_wait() -> &'static [String] {
+    distros();
+    DISTROS.wait()
+}
+
+fn in_background(
+    cell: &'static OnceLock<Vec<String>>,
+    started: &'static Once,
+    list: fn() -> Vec<String>,
+) -> &'static [String] {
+    if let Some(names) = cell.get() {
+        return names;
+    }
+    started.call_once(|| {
+        std::thread::spawn(move || {
+            cell.get_or_init(list);
+        });
+    });
+    &[]
 }
 
 #[cfg(windows)]
@@ -63,6 +92,22 @@ mod tests {
 
     fn utf16le(text: &str) -> Vec<u8> {
         text.encode_utf16().flat_map(u16::to_le_bytes).collect()
+    }
+
+    #[test]
+    fn the_list_is_empty_until_the_background_lookup_finishes() {
+        static CELL: OnceLock<Vec<String>> = OnceLock::new();
+        static STARTED: Once = Once::new();
+        fn slow() -> Vec<String> {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            vec!["Ubuntu".to_owned()]
+        }
+        assert!(in_background(&CELL, &STARTED, slow).is_empty());
+        assert!(in_background(&CELL, &STARTED, slow).is_empty());
+        while CELL.get().is_none() {
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(in_background(&CELL, &STARTED, slow), ["Ubuntu"]);
     }
 
     #[test]

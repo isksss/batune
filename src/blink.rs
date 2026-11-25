@@ -44,9 +44,12 @@ impl Blink {
     }
 
     fn timed_out(&self, now: Instant, timing: Timing) -> bool {
-        timing
-            .timeout
-            .is_some_and(|timeout| now >= self.last_input + timeout)
+        // A deadline past what Instant can hold is never reached.
+        timing.timeout.is_some_and(|timeout| {
+            self.last_input
+                .checked_add(timeout)
+                .is_some_and(|end| now >= end)
+        })
     }
 
     /// Moves the phase on to `now`; `timing` is `None` while the cursor
@@ -146,6 +149,19 @@ mod tests {
         blink.reset(t0, Some(timing));
         assert!(blink.update(ms(t0, 60_000), Some(timing)));
         assert!(blink.deadline(ms(t0, 60_000), Some(timing)).is_some());
+    }
+
+    #[test]
+    fn a_timeout_too_far_ahead_blinks_forever_without_panicking() {
+        let timing = Timing {
+            timeout: Some(Duration::MAX),
+            ..TIMING
+        };
+        let t0 = Instant::now();
+        let mut blink = Blink::new(t0);
+        blink.reset(t0, Some(timing));
+        assert!(blink.update(ms(t0, 500), Some(timing)));
+        assert!(blink.deadline(ms(t0, 500), Some(timing)).is_some());
     }
 
     #[test]

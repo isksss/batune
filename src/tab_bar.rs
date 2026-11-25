@@ -46,8 +46,6 @@ pub fn show(
                 if ui.button("+").clicked() {
                     clicked = Some(Clicked::New(config.startup_profile(None).ok().flatten()));
                 }
-                // The list is built only while the menu is open, since on
-                // Windows it asks wsl.exe the first time.
                 ui.menu_button("▾", |ui| {
                     if ui.button("[shell]").clicked() {
                         clicked = Some(Clicked::New(None));

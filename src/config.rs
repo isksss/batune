@@ -19,6 +19,10 @@ use crate::vt::{CursorShape, DEFAULT_SCROLLBACK, MAX_CLIPBOARD_BYTES};
 const FONT_SIZES: std::ops::RangeInclusive<f32> = 1.0..=200.0;
 /// Points one IncreaseFontSize or DecreaseFontSize changes the size by.
 pub const FONT_STEP: f32 = 1.0;
+/// Largest `window.padding`, in logical pixels.
+const MAX_PADDING: f32 = 200.0;
+/// Largest `cursor.blink_timeout`, one day in seconds.
+const MAX_BLINK_TIMEOUT: u64 = 86_400;
 
 /// What `--print-default-config` prints. Every value equals the default, so
 /// the file can be copied as a starting point.
@@ -415,9 +419,11 @@ impl Config {
                 "window.columns and window.rows must be at least 1".to_owned(),
             ));
         }
-        if !(self.window.padding.is_finite() && self.window.padding >= 0.0) {
+        // The renderer turns the padding into u32 pixels and doubles it.
+        if !(self.window.padding.is_finite() && (0.0..=MAX_PADDING).contains(&self.window.padding))
+        {
             return Err(Error::Invalid(format!(
-                "window.padding: {} must be 0 or more",
+                "window.padding: {} is outside 0-{MAX_PADDING}",
                 self.window.padding
             )));
         }
@@ -431,6 +437,13 @@ impl Config {
             return Err(Error::Invalid(format!(
                 "cursor.blink_interval: {} is outside 50-5000",
                 self.cursor.blink_interval
+            )));
+        }
+        // Added to an Instant, which panics far enough in the future.
+        if self.cursor.blink_timeout > MAX_BLINK_TIMEOUT {
+            return Err(Error::Invalid(format!(
+                "cursor.blink_timeout: {} is over {MAX_BLINK_TIMEOUT}",
+                self.cursor.blink_timeout
             )));
         }
         if !(1..=100).contains(&self.scrolling.multiplier) {
@@ -544,8 +557,8 @@ impl Config {
     }
 
     /// Every profile that can be started: the `[[profiles]]` entries, then
-    /// the WSL distributions on Windows. The first call on Windows runs
-    /// `wsl.exe`.
+    /// the WSL distributions on Windows once a background `wsl.exe` has
+    /// listed them (the first call starts it).
     pub fn profiles(&self) -> Vec<Profile> {
         self.profiles_with(crate::wsl::distros())
     }
@@ -573,10 +586,16 @@ impl Config {
     /// so that a profile that went away does not keep the terminal from
     /// opening.
     pub fn startup_profile(&self, name: Option<&str>) -> Result<Option<Profile>, Error> {
+        // Started here, at launch, so the tab menu has the list when opened.
+        crate::wsl::distros();
         let Some(wanted) = name.or(self.default_profile.as_deref()) else {
             return Ok(None);
         };
-        let profiles = self.profiles();
+        if let Some(profile) = self.profiles.iter().find(|p| p.name == wanted) {
+            return Ok(Some(profile.clone()));
+        }
+        // Only a name the config does not have waits for `wsl.exe`.
+        let profiles = self.profiles_with(crate::wsl::distros_wait());
         if let Some(profile) = profiles.iter().find(|p| p.name == wanted) {
             return Ok(Some(profile.clone()));
         }
