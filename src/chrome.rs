@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn dark_backgrounds_get_a_dark_frame() {
-        for name in ["batune-dark", "solarized-dark", "gruvbox-dark"] {
+        for name in ["batune-dark", "solarized-dark", "gruvbox-dark", "tokyo-night"] {
             let background = theme::find(name).unwrap().background;
             assert_eq!(theme_for(background), Theme::Dark, "{name}");
         }

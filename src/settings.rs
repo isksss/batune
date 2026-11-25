@@ -2,12 +2,14 @@
 //! main options of `config.toml` and saves them with [`config_edit`].
 
 use std::path::PathBuf;
+use std::sync::mpsc::{self, Receiver};
 
 use egui::{Color32, ComboBox, DragValue, Grid, Key};
 use winit::event_loop::EventLoopProxy;
 
 use crate::app::UserEvent;
 use crate::config::{Backdrop, Config, Fit, Shape};
+use crate::update::{self, Outcome};
 use crate::{config_edit, theme};
 
 pub struct Settings {
@@ -21,6 +23,10 @@ pub struct Settings {
     profiles: Vec<String>,
     /// The result of the last save: the error, or `None` once saved.
     status: Option<Result<(), String>>,
+    /// The running update check; dropped with the screen, the check itself
+    /// still finishes.
+    updating: Option<Receiver<Result<Outcome, String>>>,
+    update_status: Option<Result<String, String>>,
 }
 
 impl Settings {
@@ -33,6 +39,8 @@ impl Settings {
             family: config.font.family.clone().unwrap_or_default(),
             profiles: config.profiles().into_iter().map(|p| p.name).collect(),
             status: None,
+            updating: None,
+            update_status: None,
         }
     }
 
@@ -40,6 +48,15 @@ impl Settings {
     pub fn show(&mut self, ctx: &egui::Context) -> bool {
         let mut open = !ctx.input(|i| i.key_pressed(Key::Escape));
         let mut close = false;
+        if let Some(result) = self.updating.as_ref().and_then(|rx| rx.try_recv().ok()) {
+            self.updating = None;
+            self.update_status = Some(result.map(|outcome| match outcome {
+                Outcome::UpToDate(v) => format!("最新版(v{v})です"),
+                Outcome::Updated(v) => {
+                    format!("v{v} に更新しました。batune を再起動すると反映されます")
+                }
+            }));
+        }
         // Room left for the title, the message and the buttons, which stay
         // in view while the fields scroll.
         let fields_height = (ctx.content_rect().height() - 150.0).max(80.0);
@@ -67,11 +84,32 @@ impl Settings {
                     }
                     None => {}
                 }
+                match &self.update_status {
+                    _ if self.updating.is_some() => {
+                        ui.label("更新を確認しています…");
+                    }
+                    Some(Err(e)) => {
+                        ui.colored_label(Color32::from_rgb(0xe0, 0x6c, 0x75), e);
+                    }
+                    Some(Ok(message)) => {
+                        ui.label(message);
+                    }
+                    None => {}
+                }
                 ui.horizontal(|ui| {
                     if ui.button("保存").clicked() {
                         self.save();
                     }
                     close = ui.button("閉じる").clicked();
+                    // Hidden rather than disabled for a Store install, which
+                    // has nothing the user could do to enable it.
+                    if update::available()
+                        && ui
+                            .add_enabled(self.updating.is_none(), egui::Button::new("更新を確認"))
+                            .clicked()
+                    {
+                        self.check_update();
+                    }
                 });
             });
         open && !close
@@ -93,6 +131,19 @@ impl Settings {
             let _ = self.proxy.send_event(UserEvent::ConfigChanged);
         }
         self.status = Some(result);
+    }
+
+    /// Off the UI thread: the download takes seconds and can hang until the
+    /// timeout.
+    fn check_update(&mut self) {
+        let (tx, rx) = mpsc::channel();
+        let proxy = self.proxy.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(update::run());
+            let _ = proxy.send_event(UserEvent::Redraw);
+        });
+        self.updating = Some(rx);
+        self.update_status = None;
     }
 
     fn fields(&mut self, ui: &mut egui::Ui) {

@@ -54,6 +54,8 @@ install -Dm644 packaging/linux/batune.png ~/.local/share/icons/hicolor/128x128/a
 
 タブバーの歯車ボタンか Ctrl+, で設定画面を開きます。変えられるのは、既定のプロファイル(`default_profile`)、フォント(名前・大きさ・行の高さ・セルの幅)、テーマと太字を明るい色で描くか、カーソル(形・点滅・点滅の間隔・点滅をやめるまでの秒数)、スクロールバックの行数とホイール 1 目盛りの行数、ウィンドウ(余白・`backdrop`・タイトル・OSC でのタイトル変更)、背景画像の不透明度と合わせ方、画面のベル、OSC 52 の書き込み、入力中にマウスを隠すか、選択したらコピーするかです。「保存」で設定ファイルに書き込みます。変えた項目だけを書き換えるので、コメントや並び順、画面に無い項目(`[[profiles]]`・色の個別指定・キーの割り当てなど)はそのまま残ります。ファイルが無ければ作ります。値が不正なら保存せず、理由を画面に出します。保存した設定は、設定ディレクトリが起動時に無かった場合も含めてすぐに反映されます。反映のされ方はファイルを手で編集したときと同じです(後述)。開いている間のキー入力と IME は設定画面に入り、端末には送りません。Esc か「閉じる」で閉じます(保存していない変更は捨てます)。
 
+設定画面の「更新を確認」を押すと、GitHub Releases の最新リリース(プレリリースを除く)を調べ、今のバージョンより新しければダウンロードして実行ファイルを置き換えます。ダウンロードした資産は `SHA256SUMS` と照らし、合わなければ置き換えません。新しいバージョンは batune を再起動すると使われます。置き換えは実行ファイルと同じディレクトリに一時ファイルを書いてから名前を変えるので、そのディレクトリに書き込める必要があります(`/usr/bin` などに置いた場合はエラーになります)。Windows では実行中の `batune.exe` を `batune.exe.old` に退避し、次の起動時に消します。配布物は x86_64 用だけなので、ほかのアーキテクチャでは更新できません。Microsoft Store 版はストアが更新するため、このボタンは出ません。
+
 マウスのドラッグ・ダブルクリック(単語)・トリプルクリック(行)で選択し、Shift+クリックで選択範囲を延ばします。選択すると既定ですぐクリップボードにコピーします(設定の `[selection]` の `save_to_clipboard = false` で止められます。中クリックでのペーストはありません)。Ctrl+Shift+C でもコピーでき、Ctrl+Shift+V か Shift+Insert でペーストします(Windows では選択中の Ctrl+C でもコピー)。Ctrl+= / Ctrl+- / Ctrl+0 で文字サイズを拡大・縮小・元に戻します。これらのキーは設定ファイルの `[[keyboard.bindings]]` で変えられます。スクロールバックはホイール(既定は 1 ノッチ 3 行)と Shift+PgUp/PgDn(1 画面)で動かします。全画面のプログラム(vim、less など)の中では、ホイールは上下の矢印キーとして、Shift+PgUp/PgDn はそのままプログラムに送られます。マウスを使うプログラム(vim、tmux など)の上では、Shift を押しながら操作すると選択できます。
 
 OSC 52 の書き込み(tmux の `set-clipboard`、vim/neovim の OSC 52 コピーなど)はシステムのクリップボードに入ります(宛先の省略は `c` と同じ。`p`/`s` は Linux の PRIMARY 選択で、Windows では無視する)。1 MiB を超える書き込みは切り詰めずに捨てます。SSH 先や `cat` したファイルもクリップボードを書き換えられるので、不要なら設定ファイルの `[clipboard]` で無効にするか上限を下げてください。読み取りの要求には応答しません。
@@ -94,7 +96,7 @@ line_height = 1.0             # セルの高さをフォントの何倍にする
 cell_width = 1.0              # セルの幅をフォントの何倍にするか(0.5〜3.0)
 
 [colors]
-theme = "solarized-dark"      # batune-dark / batune-light / solarized-dark / solarized-light / gruvbox-dark
+theme = "solarized-dark"      # batune-dark / batune-light / solarized-dark / solarized-light / gruvbox-dark / tokyo-night
 background = "#001e26"        # テーマの色を個別に上書きできる(foreground・cursor・ansi・brights も同様)
 bold_is_bright = true         # 太字を ANSI の 0-7 番の色で指定されたら明るい 8-15 番で描く
 

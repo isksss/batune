@@ -10,6 +10,8 @@ use swash::scale::image::Content;
 use swash::scale::{Render, ScaleContext, Source, StrikeWith};
 use swash::zeno::{Angle, Format, Transform};
 
+mod drawn;
+
 use crate::render::atlas::{Rect, ShelfPacker};
 use crate::render::metrics::{CellMetrics, FontMetrics};
 
@@ -447,6 +449,21 @@ impl Fonts {
     /// base and marks the font does not compose) becomes at most two
     /// images; see [`layers`].
     pub fn rasterize(&mut self, key: &GlyphKey) -> Vec<RasterGlyph> {
+        let m = self.metrics;
+        if key.zerowidth.is_none()
+            && let Some(alpha) = drawn::mask(key.ch, m.width, m.height)
+        {
+            return vec![RasterGlyph {
+                // The renderer adds `glyph_x` and `baseline`; undo both so
+                // the mask covers the cell exactly.
+                left: -m.glyph_x,
+                top: m.baseline as i32,
+                width: m.width,
+                height: m.height,
+                color: false,
+                rgba: alpha.iter().flat_map(|&a| [a; 4]).collect(),
+            }];
+        }
         let mut parts = Vec::new();
         for shaped in self.shape(key) {
             let Some(glyph) = self.rasterize_one(key.bold, &shaped) else {
